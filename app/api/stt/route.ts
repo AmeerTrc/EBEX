@@ -29,6 +29,11 @@ export async function POST(request: Request) {
         groqForm.append("file", audioFile, "recording.webm");
         groqForm.append("model", "whisper-large-v3-turbo");
         groqForm.append("response_format", "json");
+        groqForm.append("temperature", "0");
+        groqForm.append(
+          "prompt",
+          "Ameer Mustafa, APEX, conversation in Arabic, Portuguese, or English. مرحباً، Olá, Hello."
+        );
 
         const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
           method: "POST",
@@ -110,7 +115,7 @@ export async function POST(request: Request) {
                         },
                       },
                       {
-                        text: "Transcribe the user's spoken words in this audio exactly. If Arabic, English, or Portuguese, transcribe in that respective language. Return ONLY the transcribed text, without explanation or quotes.",
+                        text: "You are an expert multilingual audio transcriber. Accurately transcribe the user's spoken words in this audio. The user may speak Arabic, English, or Portuguese. Transcribe their exact spoken words in whichever language they used. If they spoke Portuguese, transcribe in Portuguese. If Arabic, transcribe in Arabic. If English, transcribe in English. Return ONLY the transcribed text, without any timestamps, explanation, or quotes.",
                       },
                     ],
                   },

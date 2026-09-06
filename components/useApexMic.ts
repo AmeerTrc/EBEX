@@ -101,7 +101,7 @@ export function useApexMic(options: MicOptions = {}) {
         let hasSpoken = false;
         let lastVoiceTime = Date.now();
         const startTime = Date.now();
-        const silenceThreshold = options.silenceDelayMs || 1100; // 1.1s silence to auto-stop
+        const silenceThreshold = options.silenceDelayMs || 1500; // 1.5s silence for natural language transitions
 
         vadIntervalRef.current = setInterval(() => {
           if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== "recording") {
@@ -116,7 +116,7 @@ export function useApexMic(options: MicOptions = {}) {
           const average = sum / dataArray.length;
 
           // Volume threshold indicating active speech
-          if (average > 8) {
+          if (average > 7) {
             hasSpoken = true;
             lastVoiceTime = Date.now();
           }

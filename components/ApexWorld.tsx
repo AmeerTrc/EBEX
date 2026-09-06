@@ -259,7 +259,7 @@ export default function ApexWorld() {
     micError,
   } = useApexMic({
     onSilenceAutoStop: () => onSilenceRef.current(),
-    silenceDelayMs: 1100,
+    silenceDelayMs: 1500,
   });
 
   const handleFinishAndProcess = useCallback(async () => {
@@ -270,12 +270,12 @@ export default function ApexWorld() {
     setStatusMessage("Processing speech...");
     const audioBlob = await stopRecording();
 
-    if (!audioBlob || audioBlob.size < 500) {
+    if (!audioBlob || audioBlob.size < 300) {
       if (isSessionActiveRef.current) {
         const ok = await startRecording();
         if (ok && isSessionActiveRef.current) {
           setShowState("listening");
-          setStatusMessage("Listening... Speak now");
+          setStatusMessage("Listening... Speak to APEX");
         }
       }
       isProcessingRef.current = false;
@@ -302,23 +302,32 @@ export default function ApexWorld() {
               const ok = await startRecording();
               if (ok) {
                 setShowState("listening");
-                setStatusMessage("Listening... Speak now");
+                setStatusMessage("Listening... Speak to APEX");
               }
             }
-          }, 1200);
+          }, 1000);
         }
         isProcessingRef.current = false;
         return;
       }
 
-      const { text: userQuestion } = await sttRes.json();
-      if (!userQuestion || userQuestion.trim().length === 0) {
+      const sttData = await sttRes.json().catch(() => ({}));
+      const rawText = typeof sttData?.text === "string" ? sttData.text.trim() : "";
+      // Strip brackets like [music], (laughter), (silence)
+      const userQuestion = rawText.replace(/\[.*?\]|\(.*?\)/g, "").trim();
+
+      if (!userQuestion || userQuestion.length < 2) {
         if (isSessionActiveRef.current) {
-          const ok = await startRecording();
-          if (ok && isSessionActiveRef.current) {
-            setShowState("listening");
-            setStatusMessage("Listening... Speak now");
-          }
+          setStatusMessage("Didn't catch that, listening again...");
+          setTimeout(async () => {
+            if (isSessionActiveRef.current) {
+              const ok = await startRecording();
+              if (ok && isSessionActiveRef.current) {
+                setShowState("listening");
+                setStatusMessage("Listening... Speak to APEX");
+              }
+            }
+          }, 800);
         }
         isProcessingRef.current = false;
         return;
