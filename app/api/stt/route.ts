@@ -84,47 +84,57 @@ export async function POST(request: Request) {
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
         const mimeType = audioFile.type || "audio/webm";
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiApiKey.trim()}`;
+        const candidateModels = [
+          process.env.GEMINI_MODEL,
+          "gemini-3.6-flash",
+          "gemini-3.5-flash",
+          "gemini-3.7-flash",
+        ].filter(Boolean) as string[];
 
-        const geminiRes = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [
+        for (const model of candidateModels) {
+          try {
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey.trim()}`;
+
+            const geminiRes = await fetch(geminiUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [
                   {
-                    inlineData: {
-                      mimeType: mimeType.split(";")[0], // e.g. audio/webm
-                      data: base64Audio,
-                    },
-                  },
-                  {
-                    text: "Transcribe the user's spoken words in this audio exactly. If Arabic, English, or Portuguese, transcribe in that respective language. Return ONLY the transcribed text, without explanation or quotes.",
+                    role: "user",
+                    parts: [
+                      {
+                        inlineData: {
+                          mimeType: mimeType.split(";")[0], // e.g. audio/webm
+                          data: base64Audio,
+                        },
+                      },
+                      {
+                        text: "Transcribe the user's spoken words in this audio exactly. If Arabic, English, or Portuguese, transcribe in that respective language. Return ONLY the transcribed text, without explanation or quotes.",
+                      },
+                    ],
                   },
                 ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 256,
-            },
-          }),
-        });
+                generationConfig: {
+                  temperature: 0.1,
+                  maxOutputTokens: 256,
+                },
+              }),
+            });
 
-        if (geminiRes.ok) {
-          const data = await geminiRes.json();
-          const transcribed = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (transcribed) {
-            return NextResponse.json({ text: transcribed, provider: "gemini" });
+            if (geminiRes.ok) {
+              const data = await geminiRes.json();
+              const transcribed = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+              if (transcribed) {
+                return NextResponse.json({ text: transcribed, provider: `gemini (${model})` });
+              }
+            } else {
+              console.warn(`[STT] Gemini (${model}) transcription error:`, geminiRes.status);
+            }
+          } catch (modelErr) {
+            console.warn(`[STT] Gemini (${model}) request failed:`, modelErr);
           }
-        } else {
-          console.warn("[STT] Gemini transcription error:", geminiRes.status, await geminiRes.text());
         }
-      } catch (err) {
-        console.warn("[STT] Gemini audio transcription exception:", err);
-      }
     }
 
     // If no provider keys configured
