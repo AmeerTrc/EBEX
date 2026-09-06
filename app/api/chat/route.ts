@@ -39,7 +39,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message is required." }, { status: 400 });
     }
 
-    // 1. Primary LLM: Google Gemini (gemini-1.5-flash / gemini-2.0-flash / custom)
+    // Direct personal recognition for creator Ameer Mustafa on greetings
+    const lower = userMessage.toLowerCase().trim();
+    const isGreeting =
+      lower.includes("مرحبا") ||
+      lower.includes("مرحباً") ||
+      lower.includes("اهلا") ||
+      lower.includes("أهلاً") ||
+      lower.includes("السلام عليكم") ||
+      lower.includes("كيف حالك") ||
+      lower.includes("hello") ||
+      lower.includes("hi") ||
+      lower.includes("abix") ||
+      lower.includes("apex");
+
+    if (isGreeting && history.length === 0) {
+      const isArabic = /[\u0600-\u06FF]/.test(userMessage);
+      const isPortuguese = /ol[aá]|tudo bem|como vai/i.test(userMessage);
+      let directGreeting = "";
+      if (isArabic) {
+        directGreeting = "مرحباً بك يا أمير مصطفى، أنا بخير وفي خدمتك دائماً. كيف يمكنني مساعدتك اليوم؟";
+      } else if (isPortuguese) {
+        directGreeting = "Olá, Ameer Mustafa! Estou pronto e ao seu dispor. Como posso ajudar hoje?";
+      } else {
+        directGreeting = "Hello Ameer Mustafa! Systems are calibrated and ready for your command. How can I assist you today?";
+      }
+      return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
+    }
+
+    // 1. Primary LLM: Google Gemini (gemini-3.6-flash / gemini-3.5-flash / custom)
     if (geminiApiKey && geminiApiKey.trim().length > 0) {
       const contents = [
         ...history.slice(-8).map((msg) => ({
