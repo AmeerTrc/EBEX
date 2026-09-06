@@ -19,23 +19,36 @@ export function useApexMic(options: MicOptions = {}) {
   const onSilenceRef = useRef(options.onSilenceAutoStop);
   onSilenceRef.current = options.onSilenceAutoStop;
 
+  const interruptionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const getOrCreateStream = async (): Promise<MediaStream> => {
+    if (
+      streamRef.current &&
+      streamRef.current.active &&
+      streamRef.current.getAudioTracks().some((t) => t.readyState === "live")
+    ) {
+      return streamRef.current;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Microphone API not supported on this browser.");
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    streamRef.current = stream;
+    return stream;
+  };
+
   const startRecording = useCallback(async (): Promise<boolean> => {
     setMicError(null);
     audioChunksRef.current = [];
 
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Microphone API not supported on this browser.");
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      streamRef.current = stream;
+      const stream = await getOrCreateStream();
 
       // Determine supported mime type
       const mimeTypes = [
@@ -70,12 +83,15 @@ export function useApexMic(options: MicOptions = {}) {
 
       // Voice Activity Detection (VAD) via AudioContext
       try {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        const audioCtx = new AudioCtx();
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = audioContextRef.current || new AudioCtx();
         if (audioCtx.state === "suspended") {
           audioCtx.resume().catch(() => {});
         }
         audioContextRef.current = audioCtx;
+
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 512;
@@ -142,11 +158,63 @@ export function useApexMic(options: MicOptions = {}) {
       clearInterval(vadIntervalRef.current);
       vadIntervalRef.current = null;
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
   };
+
+  const stopInterruptionMonitoring = useCallback(() => {
+    if (interruptionIntervalRef.current) {
+      clearInterval(interruptionIntervalRef.current);
+      interruptionIntervalRef.current = null;
+    }
+  }, []);
+
+  const startInterruptionMonitoring = useCallback(
+    async (onInterrupt: () => void) => {
+      stopInterruptionMonitoring();
+
+      try {
+        const stream = await getOrCreateStream();
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = audioContextRef.current || new AudioCtx();
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
+        audioContextRef.current = audioCtx;
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let speechHits = 0;
+
+        interruptionIntervalRef.current = setInterval(() => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / dataArray.length;
+
+          // Sustained speech while APEX is speaking -> Barge-In!
+          if (average > 14) {
+            speechHits++;
+            if (speechHits >= 2) {
+              stopInterruptionMonitoring();
+              onInterrupt();
+            }
+          } else {
+            speechHits = Math.max(0, speechHits - 1);
+          }
+        }, 50);
+      } catch (err) {
+        console.warn("[useApexMic] Interruption monitor init failed:", err);
+      }
+    },
+    [stopInterruptionMonitoring]
+  );
 
   const stopRecording = useCallback((): Promise<Blob | null> => {
     cleanupAudio();
@@ -164,13 +232,7 @@ export function useApexMic(options: MicOptions = {}) {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         audioChunksRef.current = [];
         setIsRecording(false);
-
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-          streamRef.current = null;
-        }
         mediaRecorderRef.current = null;
-
         resolve(audioBlob);
       };
 
@@ -185,6 +247,7 @@ export function useApexMic(options: MicOptions = {}) {
 
   const cancelRecording = useCallback(() => {
     cleanupAudio();
+    stopInterruptionMonitoring();
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
@@ -195,10 +258,14 @@ export function useApexMic(options: MicOptions = {}) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
     mediaRecorderRef.current = null;
     audioChunksRef.current = [];
     setIsRecording(false);
-  }, []);
+  }, [stopInterruptionMonitoring]);
 
   return {
     isRecording,
@@ -206,5 +273,7 @@ export function useApexMic(options: MicOptions = {}) {
     startRecording,
     stopRecording,
     cancelRecording,
+    startInterruptionMonitoring,
+    stopInterruptionMonitoring,
   };
 }

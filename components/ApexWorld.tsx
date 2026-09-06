@@ -249,7 +249,15 @@ export default function ApexWorld() {
   const isProcessingRef = useRef(false);
   const onSilenceRef = useRef<() => void>(() => {});
 
-  const { isRecording, startRecording, stopRecording, cancelRecording, micError } = useApexMic({
+  const {
+    isRecording,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+    startInterruptionMonitoring,
+    stopInterruptionMonitoring,
+    micError,
+  } = useApexMic({
     onSilenceAutoStop: () => onSilenceRef.current(),
     silenceDelayMs: 1100,
   });
@@ -378,12 +386,34 @@ export default function ApexWorld() {
         { role: "model", text: reply },
       ]);
 
-      setStatusMessage(reply);
+      // Enable real-time voice interruption monitoring while APEX is speaking
+      let wasInterrupted = false;
 
-      // Synthesize and play reply using ElevenLabs (waits until speech finishes)
-      await speak(reply, (state) => {
-        setShowState(state);
+      startInterruptionMonitoring(async () => {
+        wasInterrupted = true;
+        // 1. Immediately cut off APEX's voice!
+        stop();
+        // 2. Switch state to listening
+        setShowState("listening");
+        setStatusMessage("Listening... Speak now");
+        // 3. Start recording user's new speech immediately!
+        await startRecording();
       });
+
+      // Synthesize and play reply using ElevenLabs (waits until speech finishes or resolves false on interruption)
+      await speak(reply, (state) => {
+        if (!wasInterrupted) {
+          setShowState(state);
+        }
+      });
+
+      // Stop interruption monitoring once speech is finished
+      stopInterruptionMonitoring();
+
+      // If user interrupted during playback, the interruption handler has already started recording
+      if (wasInterrupted) {
+        return;
+      }
 
       // If user instructed goodbye, power down into standby
       if (isGoodbye) {
@@ -415,7 +445,7 @@ export default function ApexWorld() {
     } finally {
       isProcessingRef.current = false;
     }
-  }, [history, speak, startRecording, stopRecording]);
+  }, [history, speak, stop, startRecording, stopRecording, startInterruptionMonitoring, stopInterruptionMonitoring]);
 
   onSilenceRef.current = handleFinishAndProcess;
 
