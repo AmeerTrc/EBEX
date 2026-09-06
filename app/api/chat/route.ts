@@ -81,7 +81,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
     }
 
-    // 1. Primary LLM: Google Gemini (gemini-3.6-flash / gemini-3.5-flash / custom)
+    // 1. Primary LLM: Groq (Ultra-fast real-time inference ~200ms)
+    if (groqApiKey && groqApiKey.trim().length > 0) {
+      const groqCandidateModels = [
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "groq/compound",
+        "allam-2-7b",
+      ];
+
+      for (const model of groqCandidateModels) {
+        try {
+          const messages = [
+            { role: "system", content: APEX_SYSTEM_PROMPT },
+            ...history.slice(-8).map((msg) => ({
+              role: msg.role === "model" ? "assistant" : msg.role,
+              content: msg.text,
+            })),
+            { role: "user", content: userMessage },
+          ];
+
+          const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${groqApiKey.trim()}`,
+              "Content-Type": "application/json",
+              "User-Agent": "Mozilla/5.0",
+            },
+            body: JSON.stringify({
+              model,
+              messages,
+              temperature: 0.7,
+              max_tokens: 350,
+            }),
+          });
+
+          if (groqRes.ok) {
+            const data = await groqRes.json();
+            let reply = data?.choices?.[0]?.message?.content?.trim() || "";
+            reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
+            if (reply) {
+              return NextResponse.json({ reply, provider: `groq (${model})` });
+            }
+          } else {
+            console.warn(`[Chat API] Groq model ${model} failed (${groqRes.status}):`, await groqRes.text());
+          }
+        } catch (err) {
+          console.warn(`[Chat API] Groq model ${model} exception:`, err);
+        }
+      }
+    }
+
+    // 2. Secondary LLM: Google Gemini (gemini-3.6-flash / gemini-3.5-flash / custom)
     if (geminiApiKey && geminiApiKey.trim().length > 0) {
       const contents = [
         ...history.slice(-8).map((msg) => ({
@@ -134,45 +186,6 @@ export async function POST(request: Request) {
         } catch (err) {
           console.warn(`[Chat API] Gemini model ${model} exception:`, err);
         }
-      }
-    }
-
-    // 2. Secondary LLM: Groq (llama-3.3-70b-versatile)
-    if (groqApiKey && groqApiKey.trim().length > 0) {
-      try {
-        const messages = [
-          { role: "system", content: APEX_SYSTEM_PROMPT },
-          ...history.slice(-8).map((msg) => ({
-            role: msg.role === "model" ? "assistant" : msg.role,
-            content: msg.text,
-          })),
-          { role: "user", content: userMessage },
-        ];
-
-        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${groqApiKey.trim()}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            messages,
-            temperature: 0.7,
-            max_tokens: 300,
-          }),
-        });
-
-        if (groqRes.ok) {
-          const data = await groqRes.json();
-          let reply = data?.choices?.[0]?.message?.content?.trim() || "";
-          reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
-          if (reply) {
-            return NextResponse.json({ reply, provider: "groq" });
-          }
-        }
-      } catch (err) {
-        console.warn("[Chat API] Groq LLM failed:", err);
       }
     }
 
