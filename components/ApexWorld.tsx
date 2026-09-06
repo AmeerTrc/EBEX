@@ -16,6 +16,7 @@ import ReasoningWebJs from "./ReasoningWeb";
 import ShaderBackgroundJs from "./ShaderBackground";
 import OrbStatusBar from "./OrbStatusBar";
 import { useApexVoice } from "./useApexVoice";
+import { useApexMic } from "./useApexMic";
 
 export type NodeSel = { name: string; key: string; color: string };
 
@@ -229,34 +230,134 @@ export function AgentOverview({ sel, onClose }: { sel: NodeSel; onClose: () => v
   );
 }
 
-const APEX_LINES = [
-  "Apex online. Neural constellation synchronized and calibrated.",
-  "Autonomous core active. All agent protocols stand ready.",
-  "Reasoning graph energized. Awaiting primary directive.",
-  "Deep synthesis initiated. Constellation running at peak efficiency.",
-];
-
 /* ── The world ── */
 export default function ApexWorld() {
   const [selected, setSelected] = useState<NodeSel | null>(null);
   const [reduced, setReduced] = useState(false);
 
-  // A tap cycles idle → thinking → speaking → idle, driven by voice playback
+  // Real conversational states: idle → listening → thinking → speaking → idle
   const [showState, setShowState] = useState<OrbState>("idle");
   const orbState: OrbState = showState;
-  const lineIndexRef = useRef(0);
+  const [history, setHistory] = useState<Array<{ role: "user" | "model"; text: string }>>([]);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const { speak, stop, isPlaying, isLoading } = useApexVoice();
+  const { speak, stop, isPlaying } = useApexVoice();
+  const { isRecording, startRecording, stopRecording, cancelRecording, micError } = useApexMic();
 
-  const boost = () => {
-    if (isPlaying || isLoading) {
+  const handleOrbClick = async () => {
+    // 1. Interruption: If currently speaking or thinking, stop audio immediately and start listening!
+    if (isPlaying || showState === "speaking" || showState === "thinking") {
       stop();
       setShowState("idle");
+      const ok = await startRecording();
+      if (ok) {
+        setShowState("listening");
+        setStatusMessage("Listening... Speak now");
+      }
       return;
     }
-    const line = APEX_LINES[lineIndexRef.current % APEX_LINES.length];
-    lineIndexRef.current += 1;
-    speak(line, setShowState);
+
+    // 2. If currently listening/recording: user clicked to finish speaking
+    if (isRecording || showState === "listening") {
+      setShowState("thinking");
+      setStatusMessage("Processing speech...");
+      const audioBlob = await stopRecording();
+
+      if (!audioBlob || audioBlob.size < 500) {
+        setShowState("idle");
+        setStatusMessage(null);
+        return;
+      }
+
+      try {
+        // Send audio to /api/stt
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "recording.webm");
+
+        const sttRes = await fetch("/api/stt", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!sttRes.ok) {
+          const errData = await sttRes.json().catch(() => ({}));
+          console.warn("[STT Error]", errData);
+          setStatusMessage(errData?.error || "Could not transcribe audio");
+          setTimeout(() => setStatusMessage(null), 3500);
+          setShowState("idle");
+          return;
+        }
+
+        const { text: userQuestion } = await sttRes.json();
+        if (!userQuestion || userQuestion.trim().length === 0) {
+          setShowState("idle");
+          setStatusMessage(null);
+          return;
+        }
+
+        setStatusMessage(`"${userQuestion}"`);
+
+        // Send transcribed question to /api/chat with session history
+        const chatRes = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: userQuestion,
+            history,
+          }),
+        });
+
+        if (!chatRes.ok) {
+          const errData = await chatRes.json().catch(() => ({}));
+          console.warn("[Chat Error]", errData);
+          setStatusMessage(errData?.error || "AI response failed");
+          setTimeout(() => setStatusMessage(null), 3500);
+          setShowState("idle");
+          return;
+        }
+
+        const { reply } = await chatRes.json();
+        if (!reply) {
+          setShowState("idle");
+          setStatusMessage(null);
+          return;
+        }
+
+        // Update multi-turn session history
+        setHistory((prev) => [
+          ...prev,
+          { role: "user", text: userQuestion },
+          { role: "model", text: reply },
+        ]);
+
+        setStatusMessage(reply);
+
+        // Synthesize and play reply using ElevenLabs
+        await speak(reply, (state) => {
+          setShowState(state);
+          if (state === "idle") {
+            setTimeout(() => setStatusMessage(null), 3000);
+          }
+        });
+      } catch (err) {
+        console.error("[Voice AI Error]", err);
+        setShowState("idle");
+        setStatusMessage("Error during voice processing");
+        setTimeout(() => setStatusMessage(null), 3500);
+      }
+      return;
+    }
+
+    // 3. If idle: start microphone recording
+    const ok = await startRecording();
+    if (ok) {
+      setShowState("listening");
+      setStatusMessage("Listening... Speak now");
+    } else {
+      setShowState("idle");
+      setStatusMessage(micError || "Microphone access required");
+      setTimeout(() => setStatusMessage(null), 3500);
+    }
   };
 
   // Single entry point for opening an agent, shared by the SVG graph and the
@@ -274,7 +375,12 @@ export default function ApexWorld() {
   }, []);
 
   // orb tap cycle → the web's activity level (same states the app streams)
-  const webState = orbState === "thinking" ? "processing" : orbState === "speaking" ? "speaking" : "standby";
+  const webState =
+    orbState === "listening" || orbState === "thinking"
+      ? "processing"
+      : orbState === "speaking"
+      ? "speaking"
+      : "standby";
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden", userSelect: "none" }}>
@@ -341,9 +447,9 @@ export default function ApexWorld() {
       <div
         role="button"
         tabIndex={0}
-        aria-label="Apex core - tap to energize"
-        onClick={boost}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); boost(); } }}
+        aria-label="Apex core - tap to talk"
+        onClick={handleOrbClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOrbClick(); } }}
         onMouseDown={(e) => e.preventDefault()}
         style={{
           position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
@@ -351,6 +457,36 @@ export default function ApexWorld() {
           zIndex: 4, cursor: "pointer", background: "transparent", border: "none", userSelect: "none",
         }}
       />
+
+      {/* Real-time status / dialogue caption overlay */}
+      {statusMessage && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 124,
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxWidth: "min(640px, 86vw)",
+            padding: "8px 18px",
+            background: "rgba(4, 8, 15, 0.78)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(0, 229, 255, 0.28)",
+            borderRadius: 20,
+            color: "#e0f7fa",
+            fontSize: "0.82rem",
+            fontFamily: "var(--font-mono, monospace)",
+            textAlign: "center",
+            letterSpacing: "0.03em",
+            lineHeight: 1.45,
+            zIndex: 25,
+            pointerEvents: "none",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+            transition: "all 0.3s ease",
+          }}
+        >
+          {statusMessage}
+        </div>
+      )}
 
       {/* equalizer + STANDBY cluster */}
       <OrbStatusBar state={orbState} />
