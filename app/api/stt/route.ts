@@ -135,6 +135,9 @@ export async function POST(request: Request) {
             console.warn(`[STT] Gemini (${model}) request failed:`, modelErr);
           }
         }
+      } catch (err) {
+        console.warn("[STT] Gemini audio transcription exception:", err);
+      }
     }
 
     // If no provider keys configured
