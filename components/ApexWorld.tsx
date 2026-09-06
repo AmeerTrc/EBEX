@@ -15,6 +15,7 @@ import ApexHeroOrb, { type OrbState } from "./ApexHeroOrb";
 import ReasoningWebJs from "./ReasoningWeb";
 import ShaderBackgroundJs from "./ShaderBackground";
 import OrbStatusBar from "./OrbStatusBar";
+import { useApexVoice } from "./useApexVoice";
 
 export type NodeSel = { name: string; key: string; color: string };
 
@@ -228,24 +229,35 @@ export function AgentOverview({ sel, onClose }: { sel: NodeSel; onClose: () => v
   );
 }
 
+const APEX_LINES = [
+  "Apex online. Neural constellation synchronized and calibrated.",
+  "Autonomous core active. All agent protocols stand ready.",
+  "Reasoning graph energized. Awaiting primary directive.",
+  "Deep synthesis initiated. Constellation running at peak efficiency.",
+];
+
 /* ── The world ── */
 export default function ApexWorld() {
   const [selected, setSelected] = useState<NodeSel | null>(null);
   const [reduced, setReduced] = useState(false);
 
-  // A tap cycles idle → thinking → speaking → idle. That state drives the
-  // backdrop, the light-cast and the reasoning web's activity level.
+  // A tap cycles idle → thinking → speaking → idle, driven by voice playback
   const [showState, setShowState] = useState<OrbState>("idle");
-  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const orbState: OrbState = showState;
+  const lineIndexRef = useRef(0);
+
+  const { speak, stop, isPlaying, isLoading } = useApexVoice();
 
   const boost = () => {
-    const next: OrbState = showState === "idle" ? "thinking" : showState === "thinking" ? "speaking" : "idle";
-    setShowState(next);
-    if (showTimer.current) clearTimeout(showTimer.current);
-    showTimer.current = setTimeout(() => setShowState("idle"), 8000);
+    if (isPlaying || isLoading) {
+      stop();
+      setShowState("idle");
+      return;
+    }
+    const line = APEX_LINES[lineIndexRef.current % APEX_LINES.length];
+    lineIndexRef.current += 1;
+    speak(line, setShowState);
   };
-  useEffect(() => () => { if (showTimer.current) clearTimeout(showTimer.current); }, []);
 
   // Single entry point for opening an agent, shared by the SVG graph and the
   // hidden accessible list, so both routes behave identically.
