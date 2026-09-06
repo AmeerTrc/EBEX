@@ -43,27 +43,40 @@ export async function POST(request: Request) {
     const isGreeting =
       lower.includes("مرحبا") ||
       lower.includes("مرحباً") ||
+      lower.includes("مرحبه") ||
+      lower.includes("هلا") ||
       lower.includes("اهلا") ||
       lower.includes("أهلاً") ||
       lower.includes("السلام عليكم") ||
       lower.includes("كيف حالك") ||
+      lower.includes("ابيكس") ||
+      lower.includes("إبيكس") ||
+      lower.includes("من أنت") ||
+      lower.includes("من انت") ||
+      lower.includes("عرف عن نفسك") ||
       lower.includes("hello") ||
       lower.includes("hi") ||
+      lower.includes("hey") ||
       lower.includes("abix") ||
       lower.includes("apex") ||
+      lower.includes("ibex") ||
+      lower.includes("olá") ||
+      lower.includes("ola") ||
+      lower.includes("oi") ||
+      lower.includes("who are you") ||
       lower.includes("من أنا") ||
       lower.includes("هل تعرفني");
 
-    if (isGreeting && (history.length === 0 || lower.includes("من أنا") || lower.includes("هل تعرفني"))) {
+    if (isGreeting && (history.length === 0 || lower.includes("من أنا") || lower.includes("من أنت") || lower.includes("عرف عن نفسك") || lower.includes("who are you") || lower.includes("هل تعرفني"))) {
       const isArabic = /[\u0600-\u06FF]/.test(userMessage);
-      const isPortuguese = /ol[aá]|tudo bem|como vai/i.test(userMessage);
+      const isPortuguese = /\b(ol[aá]|oi|tudo bem|como vai|obrigad[oa]|sou|voc[eê]|ibex)\b/i.test(lower) && !isArabic && (lower.includes("olá") || lower.includes("ola") || lower.includes("tudo bem") || lower.includes("oi"));
       let directGreeting = "";
       if (isArabic) {
-        directGreeting = "مرحباً بك يا أمير مصطفى... أنا بخير وفي خدمتك دائماً وبكامل جاهزيتي. كيف يمكنني مساعدتك اليوم؟";
+        directGreeting = "مرحباً بك يا أمير مصطفى... أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، كيف يمكنني مساعدتك اليوم؟";
       } else if (isPortuguese) {
-        directGreeting = "Olá, Ameer Mustafa! Estou pronto e ao seu inteiro dispor. Como posso ajudar hoje?";
+        directGreeting = "Olá, Ameer Mustafa! Eu sou o APEX, sua inteligência artificial e núcleo autônomo. Estou totalmente operacional e ao seu comando. Como posso ajudá-lo hoje?";
       } else {
-        directGreeting = "Greetings, Ameer Mustafa. All systems are calibrated to your command. How may I serve you today?";
+        directGreeting = "Greetings, Ameer Mustafa. I am APEX, your autonomous AI reasoning constellation. Systems are fully calibrated to your command. How may I assist you today?";
       }
       return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
     }

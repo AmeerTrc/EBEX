@@ -435,27 +435,14 @@ export default function ApexWorld() {
     // 2. If session is OFF: Glowing orb is clicked to TURN ON (تشغيل)
     setIsSessionActive(true);
     isSessionActiveRef.current = true;
-    setShowState("thinking");
-    setStatusMessage("Activating APEX Core...");
+    setShowState("listening");
+    setStatusMessage("APEX Online · Listening...");
 
-    // Welcome and self-introduction to creator Ameer Mustafa
-    const welcomeGreeting =
-      "مرحباً بك يا أمير مصطفى... أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، تفضل أنا أستمع إليك.";
-    setStatusMessage("APEX Active · Ready for your command");
-
-    // Speak welcome message (waits until complete)
-    await speak(welcomeGreeting, (state) => {
-      setShowState(state);
-    });
-
-    // Check if user canceled/turned off during welcome speech
-    if (!isSessionActiveRef.current) return;
-
-    // Immediately and automatically open microphone for first question without any clicking!
+    // Immediately open microphone silently and wait for user to greet in their language
     const ok = await startRecording();
     if (ok && isSessionActiveRef.current) {
       setShowState("listening");
-      setStatusMessage("Listening... Speak now");
+      setStatusMessage("Listening... Speak to APEX");
     } else if (!ok) {
       setShowState("idle");
       setStatusMessage(micError || "Microphone access required");
