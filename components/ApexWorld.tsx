@@ -240,6 +240,17 @@ export default function ApexWorld() {
   const orbState: OrbState = showState;
   const [history, setHistory] = useState<Array<{ role: "user" | "model"; text: string }>>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [dialogueTurns, setDialogueTurns] = useState<
+    Array<{ id: string; role: "user" | "apex"; text: string; timestamp: string }>
+  >([]);
+  const dialogueEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dialogueEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [dialogueTurns, statusMessage]);
+
+  const [lastUserText, setLastUserText] = useState<string | null>(null);
+  const [lastApexText, setLastApexText] = useState<string | null>(null);
 
   const { speak, stop, isPlaying } = useApexVoice();
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -333,7 +344,13 @@ export default function ApexWorld() {
         return;
       }
 
-      setStatusMessage(`"${userQuestion}"`);
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setDialogueTurns((prev) => [
+        ...prev,
+        { id: "user-" + Date.now(), role: "user", text: userQuestion, timestamp: timeStr },
+      ]);
+      setLastUserText(userQuestion);
+      setStatusMessage("APEX Thinking...");
 
       // Check if user spoke a departure command to power off by voice
       const lowerQ = userQuestion.toLowerCase();
@@ -388,12 +405,18 @@ export default function ApexWorld() {
         return;
       }
 
-      // Update multi-turn session history
+      // Update multi-turn session history and display full APEX response
       setHistory((prev) => [
         ...prev,
         { role: "user", text: userQuestion },
         { role: "model", text: reply },
       ]);
+      setDialogueTurns((prev) => [
+        ...prev,
+        { id: "apex-" + Date.now(), role: "apex", text: reply, timestamp: timeStr },
+      ]);
+      setLastApexText(reply);
+      setStatusMessage(null);
 
       // Enable real-time voice interruption monitoring while APEX is speaking
       let wasInterrupted = false;
@@ -402,10 +425,12 @@ export default function ApexWorld() {
         wasInterrupted = true;
         // 1. Immediately cut off APEX's voice!
         stop();
-        // 2. Switch state to listening
+        // 2. Clear processing lock so interrupted speech is accepted
+        isProcessingRef.current = false;
+        // 3. Switch state to listening
         setShowState("listening");
         setStatusMessage("Listening... Speak now");
-        // 3. Start recording user's new speech immediately!
+        // 4. Start recording user's new speech immediately!
         await startRecording();
       });
 
@@ -466,6 +491,8 @@ export default function ApexWorld() {
       stop();
       cancelRecording();
       setShowState("idle");
+      setLastUserText(null);
+      setLastApexText(null);
       setStatusMessage("APEX Standby");
       setTimeout(() => setStatusMessage(null), 2500);
       return;
@@ -589,33 +616,233 @@ export default function ApexWorld() {
         }}
       />
 
-      {/* Real-time status / dialogue caption overlay */}
-      {statusMessage && (
+      {/* Full Live Dialogue & Caption Console */}
+      {(dialogueTurns.length > 0 || statusMessage) && (
         <div
           style={{
             position: "absolute",
-            bottom: 124,
+            bottom: 110,
             left: "50%",
             transform: "translateX(-50%)",
-            maxWidth: "min(640px, 86vw)",
-            padding: "8px 18px",
-            background: "rgba(4, 8, 15, 0.78)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(0, 229, 255, 0.28)",
-            borderRadius: 20,
-            color: "#e0f7fa",
-            fontSize: "0.82rem",
-            fontFamily: "var(--font-mono, monospace)",
-            textAlign: "center",
-            letterSpacing: "0.03em",
-            lineHeight: 1.45,
+            width: "min(760px, 94vw)",
+            maxHeight: "38vh",
+            display: "flex",
+            flexDirection: "column",
+            background: "rgba(5, 12, 24, 0.92)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0, 229, 255, 0.35)",
+            borderRadius: 18,
             zIndex: 25,
-            pointerEvents: "none",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
-            transition: "all 0.3s ease",
+            boxShadow: "0 16px 48px rgba(0, 0, 0, 0.85), 0 0 28px rgba(0, 229, 255, 0.12)",
+            pointerEvents: "auto",
+            overflow: "hidden",
+            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
-          {statusMessage}
+          {/* Header Bar */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 16px",
+              background: "rgba(0, 229, 255, 0.04)",
+              borderBottom: "1px solid rgba(0, 229, 255, 0.15)",
+              fontSize: "0.72rem",
+              fontFamily: "var(--font-mono, monospace)",
+              letterSpacing: "0.08em",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor:
+                    orbState === "listening"
+                      ? "#00e5ff"
+                      : orbState === "thinking"
+                      ? "#ffd080"
+                      : orbState === "speaking"
+                      ? "#00ffaa"
+                      : "#607d8b",
+                  boxShadow: `0 0 10px currentColor`,
+                  display: "inline-block",
+                }}
+              />
+              <span style={{ color: "#00e5ff", fontWeight: 700 }}>
+                APEX CONSTELLATION • المحادثة المباشرة
+              </span>
+              <span style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: "0.68rem" }}>
+                (AR / PT / EN)
+              </span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {statusMessage && (
+                <span
+                  style={{
+                    color:
+                      orbState === "listening"
+                        ? "#00e5ff"
+                        : orbState === "thinking"
+                        ? "#ffd080"
+                        : "#80d8ff",
+                    fontSize: "0.72rem",
+                  }}
+                >
+                  {statusMessage}
+                </span>
+              )}
+              {dialogueTurns.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDialogueTurns([])}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderRadius: 6,
+                    color: "#90a4ae",
+                    fontSize: "0.65rem",
+                    padding: "2px 8px",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#ffffff";
+                    e.currentTarget.style.borderColor = "rgba(0, 229, 255, 0.5)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#90a4ae";
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
+                  }}
+                >
+                  مسح / Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Scrollable Dialogue List */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              padding: "14px 16px",
+              overflowY: "auto",
+              flex: 1,
+            }}
+          >
+            {dialogueTurns.map((turn) => {
+              const isUser = turn.role === "user";
+              const isArabic = /[\u0600-\u06FF]/.test(turn.text);
+
+              return (
+                <div
+                  key={turn.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "5px",
+                    padding: "11px 15px",
+                    background: isUser
+                      ? "rgba(0, 229, 255, 0.07)"
+                      : "rgba(245, 166, 35, 0.07)",
+                    borderLeft: !isArabic
+                      ? `3px solid ${isUser ? "#00e5ff" : "#f5a623"}`
+                      : "1px solid " + (isUser ? "rgba(0, 229, 255, 0.2)" : "rgba(245, 166, 35, 0.2)"),
+                    borderRight: isArabic
+                      ? `3px solid ${isUser ? "#00e5ff" : "#f5a623"}`
+                      : "1px solid " + (isUser ? "rgba(0, 229, 255, 0.2)" : "rgba(245, 166, 35, 0.2)"),
+                    borderTop: "1px solid " + (isUser ? "rgba(0, 229, 255, 0.15)" : "rgba(245, 166, 35, 0.15)"),
+                    borderBottom: "1px solid " + (isUser ? "rgba(0, 229, 255, 0.15)" : "rgba(245, 166, 35, 0.15)"),
+                    borderRadius: 12,
+                    boxShadow: isUser
+                      ? "0 4px 16px rgba(0, 229, 255, 0.05)"
+                      : "0 4px 16px rgba(245, 166, 35, 0.05)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "0.68rem",
+                      fontFamily: "var(--font-mono, monospace)",
+                      letterSpacing: "0.06em",
+                      fontWeight: 700,
+                      direction: "ltr",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: isUser ? "#00e5ff" : "#ffd080",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>{isUser ? "👤" : "⚡"}</span>
+                      <span>{isUser ? "أمير مصطفى (أنت) • AMEER MUSTAFA" : "نواة إبيكس • APEX CORE"}</span>
+                    </span>
+                    <span style={{ color: "rgba(255, 255, 255, 0.35)", fontWeight: 400 }}>
+                      {turn.timestamp}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "0.96rem",
+                      lineHeight: "1.6",
+                      color: isUser ? "#ffffff" : "#f0f6fc",
+                      wordBreak: "break-word",
+                      whiteSpace: "pre-wrap",
+                      direction: isArabic ? "rtl" : "ltr",
+                      textAlign: isArabic ? "right" : "left",
+                    }}
+                  >
+                    {turn.text}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Thinking pulse block inside dialogue */}
+            {orbState === "thinking" && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "10px 14px",
+                  background: "rgba(245, 166, 35, 0.06)",
+                  border: "1px dashed rgba(245, 166, 35, 0.35)",
+                  borderRadius: 12,
+                  color: "#ffd080",
+                  fontSize: "0.85rem",
+                  fontFamily: "var(--font-mono, monospace)",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor: "#ffd080",
+                    boxShadow: "0 0 10px #ffd080",
+                    display: "inline-block",
+                  }}
+                />
+                <span>APEX يفكر ويحلل البيانات... • Formulating response...</span>
+              </div>
+            )}
+
+            <div ref={dialogueEndRef} />
+          </div>
         </div>
       )}
 

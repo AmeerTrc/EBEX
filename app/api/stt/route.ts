@@ -39,6 +39,7 @@ export async function POST(request: Request) {
           method: "POST",
           headers: {
             Authorization: `Bearer ${groqApiKey.trim()}`,
+            "User-Agent": "Mozilla/5.0",
           },
           body: groqForm,
         });

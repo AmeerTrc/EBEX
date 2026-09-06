@@ -130,8 +130,8 @@ export function useApexMic(options: MicOptions = {}) {
             onSilenceRef.current?.();
           }
 
-          // Safety timeout: if user didn't speak for 9 seconds at all -> Auto Stop
-          if (!hasSpoken && Date.now() - startTime > 9000) {
+          // Safety timeout: if user didn't speak for 30 seconds at all -> Auto Stop / cycle
+          if (!hasSpoken && Date.now() - startTime > 30000) {
             if (vadIntervalRef.current) {
               clearInterval(vadIntervalRef.current);
               vadIntervalRef.current = null;
