@@ -28,7 +28,13 @@ export function useApexVoice() {
       });
   }, []);
 
+  const stopPromiseResolverRef = useRef<((val: boolean) => void) | null>(null);
+
   const stop = useCallback(() => {
+    if (stopPromiseResolverRef.current) {
+      stopPromiseResolverRef.current(false);
+      stopPromiseResolverRef.current = null;
+    }
     if (fallbackTimerRef.current) {
       clearTimeout(fallbackTimerRef.current);
       fallbackTimerRef.current = null;
@@ -47,77 +53,88 @@ export function useApexVoice() {
   }, []);
 
   const speak = useCallback(
-    async (
+    (
       text: string,
       onStateChange?: (state: OrbState) => void
-    ) => {
+    ): Promise<boolean> => {
       // Clean up previous playback
       stop();
 
       setIsLoading(true);
       onStateChange?.("thinking");
 
-      try {
-        const response = await fetch("/api/voice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
+      return new Promise<boolean>(async (resolve) => {
+        stopPromiseResolverRef.current = resolve;
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          console.warn("[ApexVoice] Voice API returned:", response.status, errData);
+        try {
+          const response = await fetch("/api/voice", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
 
-          // Graceful fallback if API key not yet set: simulate speech state
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            console.warn("[ApexVoice] Voice API returned:", response.status, errData);
+
+            // Graceful fallback simulation
+            setIsLoading(false);
+            setIsPlaying(true);
+            onStateChange?.("speaking");
+
+            fallbackTimerRef.current = setTimeout(() => {
+              setIsPlaying(false);
+              onStateChange?.("idle");
+              stopPromiseResolverRef.current = null;
+              resolve(false);
+            }, 3500);
+            return;
+          }
+
+          const blob = await response.blob();
+          const audioUrl = URL.createObjectURL(blob);
+          activeUrlRef.current = audioUrl;
+
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+
+          audio.onplay = () => {
+            setIsLoading(false);
+            setIsPlaying(true);
+            onStateChange?.("speaking");
+          };
+
+          audio.onended = () => {
+            setIsPlaying(false);
+            onStateChange?.("idle");
+            stop();
+            stopPromiseResolverRef.current = null;
+            resolve(true);
+          };
+
+          audio.onerror = (e) => {
+            console.error("[ApexVoice] Audio playback error:", e);
+            setIsPlaying(false);
+            setIsLoading(false);
+            onStateChange?.("idle");
+            stop();
+            stopPromiseResolverRef.current = null;
+            resolve(false);
+          };
+
+          await audio.play();
+        } catch (error) {
+          console.error("[ApexVoice] Speech generation error:", error);
           setIsLoading(false);
-          setIsPlaying(true);
           onStateChange?.("speaking");
-
           fallbackTimerRef.current = setTimeout(() => {
             setIsPlaying(false);
             onStateChange?.("idle");
+            stopPromiseResolverRef.current = null;
+            resolve(false);
           }, 3500);
-          return;
         }
-
-        const blob = await response.blob();
-        const audioUrl = URL.createObjectURL(blob);
-        activeUrlRef.current = audioUrl;
-
-        const audio = new Audio(audioUrl);
-        currentAudioRef.current = audio;
-
-        audio.onplay = () => {
-          setIsLoading(false);
-          setIsPlaying(true);
-          onStateChange?.("speaking");
-        };
-
-        audio.onended = () => {
-          setIsPlaying(false);
-          onStateChange?.("idle");
-          stop();
-        };
-
-        audio.onerror = (e) => {
-          console.error("[ApexVoice] Audio playback error:", e);
-          setIsPlaying(false);
-          setIsLoading(false);
-          onStateChange?.("idle");
-          stop();
-        };
-
-        await audio.play();
-      } catch (error) {
-        console.error("[ApexVoice] Speech generation error:", error);
-        setIsLoading(false);
-        // Fallback simulation
-        onStateChange?.("speaking");
-        fallbackTimerRef.current = setTimeout(() => {
-          setIsPlaying(false);
-          onStateChange?.("idle");
-        }, 3500);
-      }
+      });
     },
     [stop]
   );

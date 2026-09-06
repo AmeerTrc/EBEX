@@ -242,6 +242,10 @@ export default function ApexWorld() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const { speak, stop, isPlaying } = useApexVoice();
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const isSessionActiveRef = useRef(false);
+  isSessionActiveRef.current = isSessionActive;
+
   const isProcessingRef = useRef(false);
   const onSilenceRef = useRef<() => void>(() => {});
 
@@ -251,7 +255,7 @@ export default function ApexWorld() {
   });
 
   const handleFinishAndProcess = useCallback(async () => {
-    if (isProcessingRef.current) return;
+    if (!isSessionActiveRef.current || isProcessingRef.current) return;
     isProcessingRef.current = true;
 
     setShowState("thinking");
@@ -259,8 +263,13 @@ export default function ApexWorld() {
     const audioBlob = await stopRecording();
 
     if (!audioBlob || audioBlob.size < 500) {
-      setShowState("idle");
-      setStatusMessage(null);
+      if (isSessionActiveRef.current) {
+        const ok = await startRecording();
+        if (ok && isSessionActiveRef.current) {
+          setShowState("listening");
+          setStatusMessage("Listening... Speak now");
+        }
+      }
       isProcessingRef.current = false;
       return;
     }
@@ -278,22 +287,47 @@ export default function ApexWorld() {
       if (!sttRes.ok) {
         const errData = await sttRes.json().catch(() => ({}));
         console.warn("[STT Error]", errData);
-        setStatusMessage(errData?.error || "Could not transcribe audio");
-        setTimeout(() => setStatusMessage(null), 3500);
-        setShowState("idle");
+        if (isSessionActiveRef.current) {
+          setStatusMessage("Could not capture speech, listening again...");
+          setTimeout(async () => {
+            if (isSessionActiveRef.current) {
+              const ok = await startRecording();
+              if (ok) {
+                setShowState("listening");
+                setStatusMessage("Listening... Speak now");
+              }
+            }
+          }, 1200);
+        }
         isProcessingRef.current = false;
         return;
       }
 
       const { text: userQuestion } = await sttRes.json();
       if (!userQuestion || userQuestion.trim().length === 0) {
-        setShowState("idle");
-        setStatusMessage(null);
+        if (isSessionActiveRef.current) {
+          const ok = await startRecording();
+          if (ok && isSessionActiveRef.current) {
+            setShowState("listening");
+            setStatusMessage("Listening... Speak now");
+          }
+        }
         isProcessingRef.current = false;
         return;
       }
 
       setStatusMessage(`"${userQuestion}"`);
+
+      // Check if user spoke a departure command to power off by voice
+      const lowerQ = userQuestion.toLowerCase();
+      const isGoodbye =
+        lowerQ.includes("مع السلامة") ||
+        lowerQ.includes("إلى اللقاء") ||
+        lowerQ.includes("إغلاق") ||
+        lowerQ.includes("توقف") ||
+        lowerQ.includes("وداعا") ||
+        lowerQ.includes("bye") ||
+        lowerQ.includes("goodbye");
 
       // Send transcribed question to /api/chat with session history
       const chatRes = await fetch("/api/chat", {
@@ -308,17 +342,31 @@ export default function ApexWorld() {
       if (!chatRes.ok) {
         const errData = await chatRes.json().catch(() => ({}));
         console.warn("[Chat Error]", errData);
-        setStatusMessage(errData?.error || "AI response failed");
-        setTimeout(() => setStatusMessage(null), 3500);
-        setShowState("idle");
+        if (isSessionActiveRef.current) {
+          setStatusMessage("AI response failed, listening again...");
+          setTimeout(async () => {
+            if (isSessionActiveRef.current) {
+              const ok = await startRecording();
+              if (ok) {
+                setShowState("listening");
+                setStatusMessage("Listening... Speak now");
+              }
+            }
+          }, 1500);
+        }
         isProcessingRef.current = false;
         return;
       }
 
       const { reply } = await chatRes.json();
       if (!reply) {
-        setShowState("idle");
-        setStatusMessage(null);
+        if (isSessionActiveRef.current) {
+          const ok = await startRecording();
+          if (ok && isSessionActiveRef.current) {
+            setShowState("listening");
+            setStatusMessage("Listening... Speak now");
+          }
+        }
         isProcessingRef.current = false;
         return;
       }
@@ -332,53 +380,87 @@ export default function ApexWorld() {
 
       setStatusMessage(reply);
 
-      // Synthesize and play reply using ElevenLabs
+      // Synthesize and play reply using ElevenLabs (waits until speech finishes)
       await speak(reply, (state) => {
         setShowState(state);
-        if (state === "idle") {
-          setTimeout(() => setStatusMessage(null), 3000);
-        }
       });
+
+      // If user instructed goodbye, power down into standby
+      if (isGoodbye) {
+        setIsSessionActive(false);
+        isSessionActiveRef.current = false;
+        setShowState("idle");
+        setStatusMessage("APEX Standby");
+        setTimeout(() => setStatusMessage(null), 2500);
+        return;
+      }
+
+      // Hands-free continuous loop: automatically start listening again for next question!
+      if (isSessionActiveRef.current) {
+        const ok = await startRecording();
+        if (ok && isSessionActiveRef.current) {
+          setShowState("listening");
+          setStatusMessage("Listening... Speak now");
+        }
+      }
     } catch (err) {
       console.error("[Voice AI Error]", err);
-      setShowState("idle");
-      setStatusMessage("Error during voice processing");
-      setTimeout(() => setStatusMessage(null), 3500);
+      if (isSessionActiveRef.current) {
+        const ok = await startRecording();
+        if (ok && isSessionActiveRef.current) {
+          setShowState("listening");
+          setStatusMessage("Listening... Speak now");
+        }
+      }
     } finally {
       isProcessingRef.current = false;
     }
-  }, [history, speak, stopRecording]);
+  }, [history, speak, startRecording, stopRecording]);
 
   onSilenceRef.current = handleFinishAndProcess;
 
   const handleOrbClick = async () => {
-    // 1. Interruption: If currently speaking or thinking, stop audio immediately and start listening!
-    if (isPlaying || showState === "speaking" || showState === "thinking") {
+    // 1. If session is ALREADY ACTIVE: Glowing orb is clicked to TURN OFF (إطفاء)
+    if (isSessionActiveRef.current) {
+      setIsSessionActive(false);
+      isSessionActiveRef.current = false;
       stop();
       cancelRecording();
       setShowState("idle");
-      const ok = await startRecording();
-      if (ok) {
-        setShowState("listening");
-        setStatusMessage("Listening... Speak now");
-      }
+      setStatusMessage("APEX Standby");
+      setTimeout(() => setStatusMessage(null), 2500);
       return;
     }
 
-    // 2. If currently listening/recording: manual click to finish immediately without waiting for silence
-    if (isRecording || showState === "listening") {
-      await handleFinishAndProcess();
-      return;
-    }
+    // 2. If session is OFF: Glowing orb is clicked to TURN ON (تشغيل)
+    setIsSessionActive(true);
+    isSessionActiveRef.current = true;
+    setShowState("thinking");
+    setStatusMessage("Activating APEX Core...");
 
-    // 3. If idle: 1-click start microphone recording (auto-submits on silence)
+    // Welcome and self-introduction to creator Ameer Mustafa
+    const welcomeGreeting =
+      "مرحباً بك يا أمير مصطفى... أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، تفضل أنا أستمع إليك.";
+    setStatusMessage("APEX Active · Ready for your command");
+
+    // Speak welcome message (waits until complete)
+    await speak(welcomeGreeting, (state) => {
+      setShowState(state);
+    });
+
+    // Check if user canceled/turned off during welcome speech
+    if (!isSessionActiveRef.current) return;
+
+    // Immediately and automatically open microphone for first question without any clicking!
     const ok = await startRecording();
-    if (ok) {
+    if (ok && isSessionActiveRef.current) {
       setShowState("listening");
       setStatusMessage("Listening... Speak now");
-    } else {
+    } else if (!ok) {
       setShowState("idle");
       setStatusMessage(micError || "Microphone access required");
+      setIsSessionActive(false);
+      isSessionActiveRef.current = false;
       setTimeout(() => setStatusMessage(null), 3500);
     }
   };
