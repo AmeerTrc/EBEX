@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
         const mimeType = audioFile.type || "audio/webm";
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiApiKey.trim()}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiApiKey.trim()}`;
 
         const geminiRes = await fetch(geminiUrl, {
           method: "POST",
