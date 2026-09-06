@@ -72,7 +72,45 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[ElevenLabs API Error]", response.status, errorText);
+      console.warn("[ElevenLabs API Warning]", response.status, errorText);
+
+      // If library voice requires paid plan (Free tier limitation), fallback to deep built-in voice (Adam)
+      if (response.status === 402 || errorText.includes("cannot use library voices")) {
+        console.log("[ElevenLabs] Falling back to default deep voice (Adam)...");
+        const fallbackUrl = `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB?output_format=mp3_44100_128`;
+        const fallbackRes = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey.trim(),
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+          },
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.85,
+              style: 0.1,
+              use_speaker_boost: true,
+            },
+          }),
+        });
+
+        if (fallbackRes.ok) {
+          const fallbackBuffer = await fallbackRes.arrayBuffer();
+          return new Response(fallbackBuffer, {
+            status: 200,
+            headers: {
+              "Content-Type": "audio/mpeg",
+              "Content-Length": fallbackBuffer.byteLength.toString(),
+              "Cache-Control": "public, max-age=3600, s-maxage=3600",
+              "X-Voice-Fallback": "true",
+            },
+          });
+        }
+      }
+
       return NextResponse.json(
         {
           error: "ElevenLabs synthesis failed",
