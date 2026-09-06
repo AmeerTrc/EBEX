@@ -49,7 +49,22 @@ export async function POST(request: Request) {
       );
     }
 
+    const requestedSpeed = typeof body?.speed === "number" ? Math.max(0.70, Math.min(1.0, body.speed)) : 0.70;
+
+    // Add gentle cadence pauses to sentences so voice synthesizer maintains steady deliberate pacing
+    let pacedText = text
+      .replace(/([.!؟?])\s+/g, "$1... ")
+      .replace(/([،,])\s+/g, "$1 ");
+
     const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
+
+    const voiceSettings = {
+      stability: 0.72,
+      similarity_boost: 0.95,
+      style: 0.05,
+      use_speaker_boost: true,
+      speed: requestedSpeed,
+    };
 
     const response = await fetch(elevenLabsUrl, {
       method: "POST",
@@ -57,17 +72,12 @@ export async function POST(request: Request) {
         "xi-api-key": apiKey.trim(),
         "Content-Type": "application/json",
         "Accept": "audio/mpeg",
+        "User-Agent": "Mozilla/5.0",
       },
       body: JSON.stringify({
-        text,
+        text: pacedText,
         model_id: "eleven_multilingual_v2",
-        voice_settings: {
-          stability: 0.30,
-          similarity_boost: 0.95,
-          style: 0.45,
-          use_speaker_boost: true,
-          speed: 0.78,
-        },
+        voice_settings: voiceSettings,
       }),
     });
 
@@ -85,17 +95,12 @@ export async function POST(request: Request) {
             "xi-api-key": apiKey.trim(),
             "Content-Type": "application/json",
             "Accept": "audio/mpeg",
+            "User-Agent": "Mozilla/5.0",
           },
           body: JSON.stringify({
-            text,
+            text: pacedText,
             model_id: "eleven_multilingual_v2",
-            voice_settings: {
-              stability: 0.30,
-              similarity_boost: 0.95,
-              style: 0.45,
-              use_speaker_boost: true,
-              speed: 0.78,
-            },
+            voice_settings: voiceSettings,
           }),
         });
 

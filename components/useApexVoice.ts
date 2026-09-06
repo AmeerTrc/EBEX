@@ -55,7 +55,8 @@ export function useApexVoice() {
   const speak = useCallback(
     (
       text: string,
-      onStateChange?: (state: OrbState) => void
+      onStateChange?: (state: OrbState) => void,
+      speed?: number
     ): Promise<boolean> => {
       // Clean up previous playback
       stop();
@@ -70,7 +71,7 @@ export function useApexVoice() {
           const response = await fetch("/api/voice", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ text, speed: speed || 0.70 }),
           });
 
           if (!response.ok) {

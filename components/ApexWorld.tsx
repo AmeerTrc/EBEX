@@ -251,6 +251,7 @@ export default function ApexWorld() {
 
   const [lastUserText, setLastUserText] = useState<string | null>(null);
   const [lastApexText, setLastApexText] = useState<string | null>(null);
+  const [voiceSpeed, setVoiceSpeed] = useState<number>(0.70);
 
   const { speak, stop, isPlaying } = useApexVoice();
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -435,11 +436,15 @@ export default function ApexWorld() {
       });
 
       // Synthesize and play reply using ElevenLabs (waits until speech finishes or resolves false on interruption)
-      await speak(reply, (state) => {
-        if (!wasInterrupted) {
-          setShowState(state);
-        }
-      });
+      await speak(
+        reply,
+        (state) => {
+          if (!wasInterrupted) {
+            setShowState(state);
+          }
+        },
+        voiceSpeed
+      );
 
       // Stop interruption monitoring once speech is finished
       stopInterruptionMonitoring();
@@ -479,7 +484,7 @@ export default function ApexWorld() {
     } finally {
       isProcessingRef.current = false;
     }
-  }, [history, speak, stop, startRecording, stopRecording, startInterruptionMonitoring, stopInterruptionMonitoring]);
+  }, [history, speak, stop, startRecording, stopRecording, startInterruptionMonitoring, stopInterruptionMonitoring, voiceSpeed]);
 
   onSilenceRef.current = handleFinishAndProcess;
 
@@ -696,6 +701,26 @@ export default function ApexWorld() {
                   {statusMessage}
                 </span>
               )}
+              {/* Voice Speed Toggle */}
+              <button
+                type="button"
+                onClick={() => setVoiceSpeed((prev) => (prev === 0.70 ? 0.85 : 0.70))}
+                title="تعديل سرعة نطق الصوت"
+                style={{
+                  background: voiceSpeed === 0.70 ? "rgba(0, 229, 255, 0.12)" : "rgba(255, 255, 255, 0.08)",
+                  border: voiceSpeed === 0.70 ? "1px solid rgba(0, 229, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: 6,
+                  color: voiceSpeed === 0.70 ? "#00e5ff" : "#b0bec5",
+                  fontSize: "0.65rem",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s",
+                }}
+              >
+                {voiceSpeed === 0.70 ? "🐢 السرعة: بطيء وهادئ (0.7x)" : "⚡ السرعة: عادي (0.85x)"}
+              </button>
+
               {dialogueTurns.length > 0 && (
                 <button
                   type="button"
