@@ -242,12 +242,120 @@ export default function ApexWorld() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const { speak, stop, isPlaying } = useApexVoice();
-  const { isRecording, startRecording, stopRecording, cancelRecording, micError } = useApexMic();
+  const isProcessingRef = useRef(false);
+  const onSilenceRef = useRef<() => void>(() => {});
+
+  const { isRecording, startRecording, stopRecording, cancelRecording, micError } = useApexMic({
+    onSilenceAutoStop: () => onSilenceRef.current(),
+    silenceDelayMs: 1100,
+  });
+
+  const handleFinishAndProcess = useCallback(async () => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
+    setShowState("thinking");
+    setStatusMessage("Processing speech...");
+    const audioBlob = await stopRecording();
+
+    if (!audioBlob || audioBlob.size < 500) {
+      setShowState("idle");
+      setStatusMessage(null);
+      isProcessingRef.current = false;
+      return;
+    }
+
+    try {
+      // Send audio to /api/stt
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+
+      const sttRes = await fetch("/api/stt", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!sttRes.ok) {
+        const errData = await sttRes.json().catch(() => ({}));
+        console.warn("[STT Error]", errData);
+        setStatusMessage(errData?.error || "Could not transcribe audio");
+        setTimeout(() => setStatusMessage(null), 3500);
+        setShowState("idle");
+        isProcessingRef.current = false;
+        return;
+      }
+
+      const { text: userQuestion } = await sttRes.json();
+      if (!userQuestion || userQuestion.trim().length === 0) {
+        setShowState("idle");
+        setStatusMessage(null);
+        isProcessingRef.current = false;
+        return;
+      }
+
+      setStatusMessage(`"${userQuestion}"`);
+
+      // Send transcribed question to /api/chat with session history
+      const chatRes = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userQuestion,
+          history,
+        }),
+      });
+
+      if (!chatRes.ok) {
+        const errData = await chatRes.json().catch(() => ({}));
+        console.warn("[Chat Error]", errData);
+        setStatusMessage(errData?.error || "AI response failed");
+        setTimeout(() => setStatusMessage(null), 3500);
+        setShowState("idle");
+        isProcessingRef.current = false;
+        return;
+      }
+
+      const { reply } = await chatRes.json();
+      if (!reply) {
+        setShowState("idle");
+        setStatusMessage(null);
+        isProcessingRef.current = false;
+        return;
+      }
+
+      // Update multi-turn session history
+      setHistory((prev) => [
+        ...prev,
+        { role: "user", text: userQuestion },
+        { role: "model", text: reply },
+      ]);
+
+      setStatusMessage(reply);
+
+      // Synthesize and play reply using ElevenLabs
+      await speak(reply, (state) => {
+        setShowState(state);
+        if (state === "idle") {
+          setTimeout(() => setStatusMessage(null), 3000);
+        }
+      });
+    } catch (err) {
+      console.error("[Voice AI Error]", err);
+      setShowState("idle");
+      setStatusMessage("Error during voice processing");
+      setTimeout(() => setStatusMessage(null), 3500);
+    } finally {
+      isProcessingRef.current = false;
+    }
+  }, [history, speak, stopRecording]);
+
+  onSilenceRef.current = handleFinishAndProcess;
 
   const handleOrbClick = async () => {
     // 1. Interruption: If currently speaking or thinking, stop audio immediately and start listening!
     if (isPlaying || showState === "speaking" || showState === "thinking") {
       stop();
+      cancelRecording();
       setShowState("idle");
       const ok = await startRecording();
       if (ok) {
@@ -257,98 +365,13 @@ export default function ApexWorld() {
       return;
     }
 
-    // 2. If currently listening/recording: user clicked to finish speaking
+    // 2. If currently listening/recording: manual click to finish immediately without waiting for silence
     if (isRecording || showState === "listening") {
-      setShowState("thinking");
-      setStatusMessage("Processing speech...");
-      const audioBlob = await stopRecording();
-
-      if (!audioBlob || audioBlob.size < 500) {
-        setShowState("idle");
-        setStatusMessage(null);
-        return;
-      }
-
-      try {
-        // Send audio to /api/stt
-        const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.webm");
-
-        const sttRes = await fetch("/api/stt", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!sttRes.ok) {
-          const errData = await sttRes.json().catch(() => ({}));
-          console.warn("[STT Error]", errData);
-          setStatusMessage(errData?.error || "Could not transcribe audio");
-          setTimeout(() => setStatusMessage(null), 3500);
-          setShowState("idle");
-          return;
-        }
-
-        const { text: userQuestion } = await sttRes.json();
-        if (!userQuestion || userQuestion.trim().length === 0) {
-          setShowState("idle");
-          setStatusMessage(null);
-          return;
-        }
-
-        setStatusMessage(`"${userQuestion}"`);
-
-        // Send transcribed question to /api/chat with session history
-        const chatRes = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: userQuestion,
-            history,
-          }),
-        });
-
-        if (!chatRes.ok) {
-          const errData = await chatRes.json().catch(() => ({}));
-          console.warn("[Chat Error]", errData);
-          setStatusMessage(errData?.error || "AI response failed");
-          setTimeout(() => setStatusMessage(null), 3500);
-          setShowState("idle");
-          return;
-        }
-
-        const { reply } = await chatRes.json();
-        if (!reply) {
-          setShowState("idle");
-          setStatusMessage(null);
-          return;
-        }
-
-        // Update multi-turn session history
-        setHistory((prev) => [
-          ...prev,
-          { role: "user", text: userQuestion },
-          { role: "model", text: reply },
-        ]);
-
-        setStatusMessage(reply);
-
-        // Synthesize and play reply using ElevenLabs
-        await speak(reply, (state) => {
-          setShowState(state);
-          if (state === "idle") {
-            setTimeout(() => setStatusMessage(null), 3000);
-          }
-        });
-      } catch (err) {
-        console.error("[Voice AI Error]", err);
-        setShowState("idle");
-        setStatusMessage("Error during voice processing");
-        setTimeout(() => setStatusMessage(null), 3500);
-      }
+      await handleFinishAndProcess();
       return;
     }
 
-    // 3. If idle: start microphone recording
+    // 3. If idle: 1-click start microphone recording (auto-submits on silence)
     const ok = await startRecording();
     if (ok) {
       setShowState("listening");
