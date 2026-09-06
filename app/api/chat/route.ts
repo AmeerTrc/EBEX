@@ -34,50 +34,58 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message is required." }, { status: 400 });
     }
 
-    // 1. Primary LLM: Google Gemini (gemini-2.0-flash / gemini-1.5-flash)
+    // 1. Primary LLM: Google Gemini (gemini-1.5-flash / gemini-2.0-flash / custom)
     if (geminiApiKey && geminiApiKey.trim().length > 0) {
-      try {
-        const contents = [
-          ...history.slice(-8).map((msg) => ({
-            role: msg.role === "assistant" ? "model" : msg.role,
-            parts: [{ text: msg.text }],
-          })),
-          {
-            role: "user",
-            parts: [{ text: userMessage }],
-          },
-        ];
+      const contents = [
+        ...history.slice(-8).map((msg) => ({
+          role: msg.role === "assistant" ? "model" : msg.role,
+          parts: [{ text: msg.text }],
+        })),
+        {
+          role: "user",
+          parts: [{ text: userMessage }],
+        },
+      ];
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey.trim()}`;
+      const candidateModels = [
+        process.env.GEMINI_MODEL,
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+      ].filter(Boolean) as string[];
 
-        const res = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: APEX_SYSTEM_PROMPT }],
-            },
-            contents,
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 500,
-            },
-          }),
-        });
+      for (const model of candidateModels) {
+        try {
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey.trim()}`;
 
-        if (res.ok) {
-          const data = await res.json();
-          let reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-          // Strip any residual markdown formatting for smooth TTS audio
-          reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
-          if (reply) {
-            return NextResponse.json({ reply, provider: "gemini" });
+          const res = await fetch(geminiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: APEX_SYSTEM_PROMPT }],
+              },
+              contents,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 400,
+              },
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            let reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
+            if (reply) {
+              return NextResponse.json({ reply, provider: `gemini (${model})` });
+            }
+          } else {
+            console.warn(`[Chat API] Gemini model ${model} failed (${res.status}):`, await res.text());
           }
-        } else {
-          console.warn("[Chat API] Gemini returned error:", res.status, await res.text());
+        } catch (err) {
+          console.warn(`[Chat API] Gemini model ${model} exception:`, err);
         }
-      } catch (err) {
-        console.warn("[Chat API] Gemini request failed, checking fallback:", err);
       }
     }
 
