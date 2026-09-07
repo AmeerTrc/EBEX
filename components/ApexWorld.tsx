@@ -601,49 +601,53 @@ export default function ApexWorld() {
         }}
       />
 
-      {/* Full Live Dialogue & Caption Console */}
-      {(dialogueTurns.length > 0 || statusMessage) && (
+      {/* Minimal Sleek Caption HUD (Positioned safely below orb core) */}
+      {(isSessionActive || statusMessage || orbState !== "idle") && (
         <div
           style={{
             position: "absolute",
             bottom: 110,
             left: "50%",
             transform: "translateX(-50%)",
-            width: "min(760px, 94vw)",
-            maxHeight: "38vh",
+            width: "min(640px, 90vw)",
             display: "flex",
             flexDirection: "column",
-            background: "rgba(5, 12, 24, 0.92)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0, 229, 255, 0.35)",
-            borderRadius: 18,
+            gap: "6px",
+            padding: "10px 16px",
+            background: "rgba(4, 10, 22, 0.88)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            border: `1px solid ${
+              orbState === "speaking"
+                ? "rgba(245, 166, 35, 0.45)"
+                : orbState === "thinking"
+                ? "rgba(255, 208, 128, 0.45)"
+                : "rgba(0, 229, 255, 0.35)"
+            }`,
+            borderRadius: 14,
             zIndex: 25,
-            boxShadow: "0 16px 48px rgba(0, 0, 0, 0.85), 0 0 28px rgba(0, 229, 255, 0.12)",
+            boxShadow: "0 10px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 229, 255, 0.1)",
             pointerEvents: "auto",
-            overflow: "hidden",
-            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            transition: "all 0.3s ease",
           }}
         >
-          {/* Header Bar */}
+          {/* Header Row: Speaker identity + Minimal Status */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "10px 16px",
-              background: "rgba(0, 229, 255, 0.04)",
-              borderBottom: "1px solid rgba(0, 229, 255, 0.15)",
-              fontSize: "0.72rem",
+              fontSize: "0.68rem",
               fontFamily: "var(--font-mono, monospace)",
-              letterSpacing: "0.08em",
+              letterSpacing: "0.06em",
+              direction: "ltr",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <span
                 style={{
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   borderRadius: "50%",
                   backgroundColor:
                     orbState === "listening"
@@ -651,85 +655,38 @@ export default function ApexWorld() {
                       : orbState === "thinking"
                       ? "#ffd080"
                       : orbState === "speaking"
-                      ? "#00ffaa"
+                      ? "#f5a623"
                       : "#607d8b",
-                  boxShadow: `0 0 10px currentColor`,
-                  display: "inline-block",
+                  boxShadow: "0 0 8px currentColor",
                 }}
               />
-              <span style={{ color: "#00e5ff", fontWeight: 700 }}>
-                APEX CONSTELLATION • المحادثة المباشرة
-              </span>
-              <span style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: "0.68rem" }}>
-                (AR / PT / EN)
+              <span
+                style={{
+                  color:
+                    orbState === "speaking"
+                      ? "#ffd080"
+                      : orbState === "listening" || orbState === "thinking"
+                      ? "#00e5ff"
+                      : "#80d8ff",
+                  fontWeight: 700,
+                }}
+              >
+                {orbState === "speaking"
+                  ? "⚡ APEX CORE • نواة إبيكس"
+                  : orbState === "thinking"
+                  ? "⚡ APEX THINKING... • جاري التفكير"
+                  : "👤 AMEER MUSTAFA • أمير مصطفى"}
               </span>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {statusMessage && (
-                <span
-                  style={{
-                    color:
-                      orbState === "listening"
-                        ? "#00e5ff"
-                        : orbState === "thinking"
-                        ? "#ffd080"
-                        : "#80d8ff",
-                    fontSize: "0.72rem",
-                  }}
-                >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {statusMessage && orbState !== "speaking" && (
+                <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "0.65rem" }}>
                   {statusMessage}
                 </span>
               )}
-              {/* Voice Speed Toggle */}
-              <button
-                type="button"
-                onClick={() => setVoiceSpeed((prev) => (prev === 0.70 ? 0.85 : 0.70))}
-                title="تعديل سرعة نطق الصوت"
-                style={{
-                  background: voiceSpeed === 0.70 ? "rgba(0, 229, 255, 0.12)" : "rgba(255, 255, 255, 0.08)",
-                  border: voiceSpeed === 0.70 ? "1px solid rgba(0, 229, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: 6,
-                  color: voiceSpeed === 0.70 ? "#00e5ff" : "#b0bec5",
-                  fontSize: "0.65rem",
-                  padding: "2px 8px",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                }}
-              >
-                {voiceSpeed === 0.70 ? "🐢 السرعة: بطيء وهادئ (0.7x)" : "⚡ السرعة: عادي (0.85x)"}
-              </button>
 
-              {dialogueTurns.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setDialogueTurns([])}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: 6,
-                    color: "#90a4ae",
-                    fontSize: "0.65rem",
-                    padding: "2px 8px",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "#ffffff";
-                    e.currentTarget.style.borderColor = "rgba(0, 229, 255, 0.5)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "#90a4ae";
-                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
-                  }}
-                >
-                  مسح / Clear
-                </button>
-              )}
-
-              {/* Standby / Shutdown Toggle */}
+              {/* Minimal Standby Button */}
               {isSessionActive && (
                 <button
                   type="button"
@@ -742,149 +699,71 @@ export default function ApexWorld() {
                     setStatusMessage("APEX Standby");
                     setTimeout(() => setStatusMessage(null), 2500);
                   }}
-                  title="إيقاف الجلسة والعودة للوضع الخامل"
+                  title="إيقاف / Standby"
                   style={{
-                    background: "rgba(255, 68, 68, 0.12)",
-                    border: "1px solid rgba(255, 68, 68, 0.4)",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
                     borderRadius: 6,
-                    color: "#ff8a80",
-                    fontSize: "0.65rem",
-                    padding: "2px 8px",
+                    color: "rgba(255, 255, 255, 0.6)",
+                    fontSize: "0.6rem",
+                    padding: "1px 6px",
                     cursor: "pointer",
-                    fontFamily: "inherit",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(255, 68, 68, 0.25)";
-                    e.currentTarget.style.color = "#ffffff";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(255, 68, 68, 0.12)";
-                    e.currentTarget.style.color = "#ff8a80";
                   }}
                 >
-                  ⏹️ إنهاء / Standby
+                  إغلاق ✕
                 </button>
               )}
             </div>
           </div>
 
-          {/* Scrollable Dialogue List */}
+          {/* Caption Content Text (Shows ONLY current active speaker's speech) */}
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
-              padding: "14px 16px",
-              overflowY: "auto",
-              flex: 1,
+              fontSize: "0.92rem",
+              lineHeight: "1.5",
+              color: orbState === "speaking" ? "#fff8e7" : "#ffffff",
+              wordBreak: "break-word",
+              direction:
+                orbState === "speaking"
+                  ? /[\u0600-\u06FF]/.test(lastApexText || "")
+                    ? "rtl"
+                    : "ltr"
+                  : /[\u0600-\u06FF]/.test(lastUserText || "")
+                  ? "rtl"
+                  : "ltr",
+              textAlign:
+                orbState === "speaking"
+                  ? /[\u0600-\u06FF]/.test(lastApexText || "")
+                    ? "right"
+                    : "left"
+                  : /[\u0600-\u06FF]/.test(lastUserText || "")
+                  ? "right"
+                  : "left",
             }}
           >
-            {dialogueTurns.map((turn) => {
-              const isUser = turn.role === "user";
-              const isArabic = /[\u0600-\u06FF]/.test(turn.text);
-
-              return (
-                <div
-                  key={turn.id}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
-                    padding: "11px 15px",
-                    background: isUser
-                      ? "rgba(0, 229, 255, 0.07)"
-                      : "rgba(245, 166, 35, 0.07)",
-                    borderLeft: !isArabic
-                      ? `3px solid ${isUser ? "#00e5ff" : "#f5a623"}`
-                      : "1px solid " + (isUser ? "rgba(0, 229, 255, 0.2)" : "rgba(245, 166, 35, 0.2)"),
-                    borderRight: isArabic
-                      ? `3px solid ${isUser ? "#00e5ff" : "#f5a623"}`
-                      : "1px solid " + (isUser ? "rgba(0, 229, 255, 0.2)" : "rgba(245, 166, 35, 0.2)"),
-                    borderTop: "1px solid " + (isUser ? "rgba(0, 229, 255, 0.15)" : "rgba(245, 166, 35, 0.15)"),
-                    borderBottom: "1px solid " + (isUser ? "rgba(0, 229, 255, 0.15)" : "rgba(245, 166, 35, 0.15)"),
-                    borderRadius: 12,
-                    boxShadow: isUser
-                      ? "0 4px 16px rgba(0, 229, 255, 0.05)"
-                      : "0 4px 16px rgba(245, 166, 35, 0.05)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      fontSize: "0.68rem",
-                      fontFamily: "var(--font-mono, monospace)",
-                      letterSpacing: "0.06em",
-                      fontWeight: 700,
-                      direction: "ltr",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: isUser ? "#00e5ff" : "#ffd080",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <span>{isUser ? "👤" : "⚡"}</span>
-                      <span>{isUser ? "أمير مصطفى (أنت) • AMEER MUSTAFA" : "نواة إبيكس • APEX CORE"}</span>
-                    </span>
-                    <span style={{ color: "rgba(255, 255, 255, 0.35)", fontWeight: 400 }}>
-                      {turn.timestamp}
-                    </span>
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "0.96rem",
-                      lineHeight: "1.6",
-                      color: isUser ? "#ffffff" : "#f0f6fc",
-                      wordBreak: "break-word",
-                      whiteSpace: "pre-wrap",
-                      direction: isArabic ? "rtl" : "ltr",
-                      textAlign: isArabic ? "right" : "left",
-                    }}
-                  >
-                    {turn.text}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Thinking pulse block inside dialogue */}
-            {orbState === "thinking" && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px 14px",
-                  background: "rgba(245, 166, 35, 0.06)",
-                  border: "1px dashed rgba(245, 166, 35, 0.35)",
-                  borderRadius: 12,
-                  color: "#ffd080",
-                  fontSize: "0.85rem",
-                  fontFamily: "var(--font-mono, monospace)",
-                }}
-              >
+            {orbState === "speaking" ? (
+              // When APEX is speaking -> Display ONLY APEX speech
+              <span>{lastApexText || "جاري التحدث..."}</span>
+            ) : orbState === "thinking" ? (
+              // When thinking -> Display user speech + thinking prompt
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {lastUserText && (
+                  <span style={{ color: "rgba(255, 255, 255, 0.85)" }}>{lastUserText}</span>
+                )}
                 <span
                   style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    backgroundColor: "#ffd080",
-                    boxShadow: "0 0 10px #ffd080",
-                    display: "inline-block",
+                    fontSize: "0.78rem",
+                    color: "#ffd080",
+                    fontFamily: "var(--font-mono, monospace)",
                   }}
-                />
-                <span>APEX يفكر ويحلل البيانات... • Formulating response...</span>
+                >
+                  ⚡ APEX يفكر ويحلل الإجابة...
+                </span>
               </div>
+            ) : (
+              // When user is listening/talking -> Display ONLY user speech
+              <span>{lastUserText || statusMessage || "استماع... اتكلم الآن"}</span>
             )}
-
-            <div ref={dialogueEndRef} />
           </div>
         </div>
       )}
