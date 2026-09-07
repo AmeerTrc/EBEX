@@ -501,32 +501,22 @@ export default function ApexWorld() {
   onSilenceRef.current = handleFinishAndProcess;
 
   const handleOrbClick = async () => {
-    // 1. If APEX is currently speaking: Tap immediately interrupts APEX and opens mic!
-    if (showState === "speaking") {
-      stop();
+    // 1. If session is currently ON / Active (listening, thinking, or speaking):
+    //    Tapping the glowing core turns OFF the system into Standby (إطفاء)!
+    if (isSessionActiveRef.current || showState !== "idle") {
+      setIsSessionActive(false);
+      isSessionActiveRef.current = false;
       isProcessingRef.current = false;
-      setShowState("listening");
-      setStatusMessage("Listening... Speak to APEX");
-      await startRecording();
+      stop(); // Stop any voice playback immediately
+      cancelRecording(); // Stop microphone recording and cleanup streams
+      setShowState("idle");
+      setStatusMessage("APEX Standby");
+      setTimeout(() => setStatusMessage(null), 2500);
       return;
     }
 
-    // 2. If APEX is currently listening and recording: Tap immediately submits speech (Push-to-Send)!
-    if (showState === "listening" && isRecording) {
-      handleFinishAndProcess();
-      return;
-    }
-
-    // 3. If APEX is currently thinking: Tap cancels thinking and opens mic!
-    if (showState === "thinking") {
-      isProcessingRef.current = false;
-      setShowState("listening");
-      setStatusMessage("Listening... Speak to APEX");
-      await startRecording();
-      return;
-    }
-
-    // 4. If session is idle / off: Turn ON and start listening!
+    // 2. If session is currently OFF / Standby:
+    //    Tapping the glowing core turns ON the system and starts listening (تشغيل)!
     setIsSessionActive(true);
     isSessionActiveRef.current = true;
     setShowState("listening");
