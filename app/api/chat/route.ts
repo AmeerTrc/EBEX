@@ -153,13 +153,13 @@ export async function POST(request: Request) {
 
     const effectiveSystemPrompt = APEX_SYSTEM_PROMPT + languageOverrideInstruction;
 
-    // 1. Primary LLM: Groq (Ultra-fast real-time inference ~200ms)
+    // 1. Primary LLM: Groq (Ultra-fast real-time inference ~150ms)
     if (groqApiKey && groqApiKey.trim().length > 0) {
       const groqCandidateModels = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
-        "qwen/qwen3.6-27b",
-        "qwen/qwen3.8-27b",
         "groq/compound",
       ];
 

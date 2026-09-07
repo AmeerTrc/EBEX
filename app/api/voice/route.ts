@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         text: cleanText,
-        model_id: "eleven_multilingual_v2",
+        model_id: "eleven_turbo_v2_5",
         voice_settings: voiceSettings,
       }),
     });
@@ -96,8 +96,8 @@ export async function POST(request: Request) {
             "User-Agent": "Mozilla/5.0",
           },
           body: JSON.stringify({
-            text: pacedText,
-            model_id: "eleven_multilingual_v2",
+            text: cleanText,
+            model_id: "eleven_turbo_v2_5",
             voice_settings: voiceSettings,
           }),
         });
