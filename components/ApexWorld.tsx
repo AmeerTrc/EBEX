@@ -464,6 +464,7 @@ export default function ApexWorld() {
         { id: "user-" + Date.now(), role: "user", text: userQuestion, timestamp: timeStr },
       ]);
       setLastUserText(userQuestion);
+      setLastApexTranslation(null);
       setStatusMessage("APEX Thinking...");
 
       // Check if user spoke a departure command to power off by voice
@@ -548,7 +549,7 @@ export default function ApexWorld() {
         { id: "apex-" + Date.now(), role: "apex", text: reply, timestamp: timeStr },
       ]);
       setLastApexText(reply);
-      setLastApexTranslation(chatData?.translation || null);
+      setLastApexTranslation(chatData?.translation || chatData?.translation_ar || null);
       setStatusMessage(null);
 
       // Ensure microphone is completely stopped during speech playback so speakers don't echo or self-interrupt
@@ -895,22 +896,37 @@ export default function ApexWorld() {
                 {lastApexTranslation && (
                   <div
                     style={{
-                      fontSize: "0.84rem",
-                      lineHeight: "1.4",
-                      color: "#00e5ff",
+                      fontSize: "0.88rem",
+                      lineHeight: "1.5",
+                      color: "#e6f1ff",
                       direction: "rtl",
                       textAlign: "right",
-                      background: "rgba(0, 229, 255, 0.08)",
-                      borderRight: "3px solid #00e5ff",
-                      padding: "5px 10px",
-                      borderRadius: "6px",
-                      marginTop: "2px",
+                      background: "rgba(245, 166, 35, 0.08)",
+                      border: "1px solid rgba(245, 166, 35, 0.25)",
+                      borderRight: "3px solid #f5a623",
+                      padding: "7px 12px",
+                      borderRadius: "8px",
+                      marginTop: "4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "3px",
                     }}
                   >
-                    <span style={{ color: "#ffd080", fontWeight: 700, marginLeft: "5px" }}>
-                      الترجمة بالعربية:
-                    </span>
-                    <span>{lastApexTranslation}</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "0.72rem",
+                        color: "#ffd080",
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span>🌐</span>
+                      <span>الترجمة بالعربية:</span>
+                    </div>
+                    <div>{lastApexTranslation}</div>
                   </div>
                 )}
               </div>

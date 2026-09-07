@@ -37,7 +37,10 @@ Key Persona & Demeanor:
    - Absolutely NO markdown formatting symbols (*, **, #, bullets -, emojis, code fences) and NO ellipses (...).
    - Write clean, natural prose so the text displays cleanly and speech flows smoothly without artificial delays.`;
 
-function formatChatResponse(rawReply: string): { reply: string; translation?: string } {
+async function formatChatResponse(
+  rawReply: string,
+  groqApiKey?: string
+): Promise<{ reply: string; translation?: string }> {
   let text = rawReply.trim();
 
   // 1. Try JSON parsing if the model returned JSON
@@ -46,24 +49,101 @@ function formatChatResponse(rawReply: string): { reply: string; translation?: st
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.reply && typeof parsed.reply === "string") {
-        return {
-          reply: parsed.reply.replace(/[*#`_~[\]]/g, "").trim(),
-          translation: typeof parsed.translation === "string" && parsed.translation.trim().length > 0 ? parsed.translation.replace(/[*#`_~[\]]/g, "").trim() : undefined,
-        };
+        const replyClean = parsed.reply.replace(/[*#`_~[\]]/g, "").trim();
+        const transClean =
+          typeof parsed.translation === "string" && parsed.translation.trim().length > 0
+            ? parsed.translation.replace(/[*#`_~[\]]/g, "").trim()
+            : undefined;
+
+        if (transClean) {
+          return { reply: replyClean, translation: transClean };
+        }
+        text = replyClean;
       }
     }
   } catch {}
 
-  // 2. If text contains explicit delimiters like (الترجمة: ...)
-  const translationMatch = text.match(/(?:\(الترجمة بالعربية:|\(الترجمة:|الترجمة بالعربية:|الترجمة:)\s*([^\n\)]+)/i);
+  // 2. Dual tags [SPOKEN] and [ARABIC_TRANSLATION]
+  if (text.includes("[ARABIC_TRANSLATION]")) {
+    const parts = text.split(/\[ARABIC_TRANSLATION\]/i);
+    const spoken = parts[0]
+      .replace(/\[SPOKEN\]/i, "")
+      .replace(/[*#`~]/g, "")
+      .trim()
+      .replace(/\n+/g, " ");
+    const trans = parts[1]
+      ?.replace(/\[\/ARABIC_TRANSLATION\]/i, "")
+      .replace(/[*#`~]/g, "")
+      .trim()
+      .replace(/\n+/g, " ");
+    if (trans) {
+      return { reply: spoken, translation: trans };
+    }
+  }
+
+  // 3. Delimiters like (الترجمة بالعربية: ...) or (الترجمة: ...)
+  const translationMatch = text.match(
+    /(?:\(الترجمة بالعربية:|\(الترجمة:|الترجمة بالعربية:|الترجمة:)\s*([^\n\)]+)/i
+  );
   if (translationMatch) {
     const translation = translationMatch[1].trim();
-    const spokenReply = text.replace(translationMatch[0], "").replace(/[\(\)]/g, "").trim();
+    const spokenReply = text
+      .replace(translationMatch[0], "")
+      .replace(/[\(\)]/g, "")
+      .replace(/[*#`_~[\]]/g, "")
+      .trim();
     return { reply: spokenReply, translation };
   }
 
-  // 3. Clean raw text fallback
-  const cleanReply = text.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
+  // 4. Clean spoken reply
+  const cleanReply = text
+    .replace(/\[SPOKEN\]/i, "")
+    .replace(/[*#`_~[\]]/g, "")
+    .replace(/\n+/g, " ")
+    .trim();
+
+  // 5. Automatic Fallback: If text has NO Arabic letters (e.g. Portuguese / English),
+  //    guarantee an accurate Arabic translation using fast Groq model (~200ms)
+  const isArabic = /[\u0600-\u06FF]/.test(cleanReply);
+  if (!isArabic && groqApiKey && groqApiKey.trim().length > 0 && cleanReply.length > 2) {
+    try {
+      const transRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqApiKey.trim()}`,
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0",
+        },
+        body: JSON.stringify({
+          model: "qwen/qwen3.8-27b",
+          messages: [
+            {
+              role: "system",
+              content:
+                "أنت مترجم فوري دقيق. ترجم النص التالي بدقة وسلاسة إلى اللغة العربية. أخرج الترجمة العربية فقط دون أي زيادات أو شروحات.",
+            },
+            { role: "user", content: cleanReply },
+          ],
+          temperature: 0.2,
+          max_tokens: 400,
+        }),
+      });
+
+      if (transRes.ok) {
+        const transData = await transRes.json();
+        const autoTrans = transData?.choices?.[0]?.message?.content?.trim();
+        if (autoTrans) {
+          return {
+            reply: cleanReply,
+            translation: autoTrans.replace(/[*#`_~[\]]/g, "").trim(),
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[Auto-Translate Error]", err);
+    }
+  }
+
   return { reply: cleanReply };
 }
 
@@ -99,14 +179,17 @@ export async function POST(request: Request) {
       const isArabic = /[\u0600-\u06FF]/.test(userMessage);
       const isPortuguese = lower.includes("sistema") || lower.includes("verificar");
       let reply = "";
+      let translation: string | undefined = undefined;
       if (isArabic) {
         reply = "بدء فحص النظام... مصفوفات الذكاء متصلة، العقد التشغيلية تعمل بنسبة 100%. النظام بكامل الجاهزية لأوامرك يا أمير مصطفى.";
       } else if (isPortuguese) {
-        reply = "Iniciando verificação do sistema... Matrizes neurais online, todas as 18 estações operando a 100%. Sistemas prontos para o seu comando, Ameer Mustafa.";
+        reply = "Iniciando verificação do sistema. Matrizes neurais online, todas as 18 estações operando a 100%. Sistemas prontos para o seu comando, Ameer Mustafa.";
+        translation = "بدء فحص النظام. مصفوفات الذكاء متصلة، كافة العقد الـ 18 تعمل بنسبة 100%. النظام بكامل الجاهزية لأوامرك يا أمير مصطفى.";
       } else {
-        reply = "Initiating system check... Neural matrices online, all 18 nodes operating at 100%. Systems stand ready for your command, Ameer Mustafa.";
+        reply = "Initiating system check. Neural matrices online, all 18 nodes operating at 100%. Systems stand ready for your command, Ameer Mustafa.";
+        translation = "بدء فحص النظام. مصفوفات الذكاء متصلة، كافة العقد الـ 18 تعمل بنسبة 100%. النظام بكامل الجاهزية لأوامرك يا أمير مصطفى.";
       }
-      return NextResponse.json({ reply, provider: "apex-core", action: "system_check" });
+      return NextResponse.json({ reply, translation, translation_ar: translation, provider: "apex-core", action: "system_check" });
     }
 
     // Only intercept simple standalone identity questions when no instructions are given
@@ -121,14 +204,17 @@ export async function POST(request: Request) {
       const isArabic = /[\u0600-\u06FF]/.test(userMessage);
       const isPortuguese = lower.includes("quem");
       let directGreeting = "";
+      let translation: string | undefined = undefined;
       if (isArabic) {
         directGreeting = "مرحباً بك يا أمير مصطفى... أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، كيف يمكنني مساعدتك اليوم؟";
       } else if (isPortuguese) {
         directGreeting = "Olá, Ameer Mustafa! Eu sou o APEX, sua inteligência artificial e núcleo autônomo. Estou totalmente operacional e ao seu comando. Como posso ajudá-lo hoje?";
+        translation = "مرحباً يا أمير مصطفى! أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، كيف يمكنني مساعدتك اليوم؟";
       } else {
         directGreeting = "Greetings, Ameer Mustafa. I am APEX, your autonomous AI reasoning constellation. Systems are fully calibrated to your command. How may I assist you today?";
+        translation = "تحياتي يا أمير مصطفى. أنا APEX، عقلك الاصطناعي ونظامك المستقل. مصفوفاتي بكامل الجاهزية لأوامرك. كيف يمكنني مساعدتك اليوم؟";
       }
-      return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
+      return NextResponse.json({ reply: directGreeting, translation, translation_ar: translation, provider: "apex-core" });
     }
 
     // Automatic Input Language Detector & Override Generator
@@ -240,10 +326,11 @@ export async function POST(request: Request) {
             const data = await groqRes.json();
             let rawReply = data?.choices?.[0]?.message?.content?.trim() || "";
             if (rawReply) {
-              const formatted = formatChatResponse(rawReply);
+              const formatted = await formatChatResponse(rawReply, groqApiKey);
               return NextResponse.json({
                 reply: formatted.reply,
                 translation: formatted.translation,
+                translation_ar: formatted.translation,
                 provider: `groq (${model})`,
               });
             }
@@ -300,10 +387,11 @@ export async function POST(request: Request) {
             const data = await res.json();
             let rawReply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
             if (rawReply) {
-              const formatted = formatChatResponse(rawReply);
+              const formatted = await formatChatResponse(rawReply, groqApiKey);
               return NextResponse.json({
                 reply: formatted.reply,
                 translation: formatted.translation,
+                translation_ar: formatted.translation,
                 provider: `gemini (${model})`,
               });
             }
@@ -346,10 +434,11 @@ export async function POST(request: Request) {
           const data = await openAiRes.json();
           let rawReply = data?.choices?.[0]?.message?.content?.trim() || "";
           if (rawReply) {
-            const formatted = formatChatResponse(rawReply);
+            const formatted = await formatChatResponse(rawReply, groqApiKey);
             return NextResponse.json({
               reply: formatted.reply,
               translation: formatted.translation,
+              translation_ar: formatted.translation,
               provider: "openai",
             });
           }
