@@ -14,16 +14,16 @@
  */
 
 import { useEffect, useState } from "react";
-import { Sparkles, Linkedin, ArrowUpRight } from "lucide-react";
+import { Sparkles, Instagram, ArrowUpRight } from "lucide-react";
 
 const ACCENT = "#00e5ff";
 const WCODE: Record<number, string> = { 0: "Clear", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog", 51: "Drizzle", 53: "Drizzle", 55: "Drizzle", 61: "Rain", 63: "Rain", 65: "Heavy rain", 71: "Snow", 73: "Snow", 75: "Snow", 80: "Showers", 81: "Showers", 82: "Showers", 95: "Storm", 96: "Storm", 99: "Storm" };
 
 type Tile = { key: string; icon: typeof Sparkles; label: string; href: string };
 
-// Social links: Ameer Mustafa LinkedIn profile
+// Social links: Ameer Mustafa Instagram profile
 const TILES: Tile[] = [
-  { key: "linkedin", icon: Linkedin, label: "أمير مصطفى • LinkedIn", href: "https://www.linkedin.com/in/ameer-mustafa" },
+  { key: "instagram", icon: Instagram, label: "أمير مصطفى • Instagram", href: "https://www.instagram.com/ameermustafa" },
 ];
 
 function Clock() {
