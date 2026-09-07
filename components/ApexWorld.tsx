@@ -390,7 +390,7 @@ export default function ApexWorld() {
     micError,
   } = useApexMic({
     onSilenceAutoStop: () => onSilenceRef.current(),
-    silenceDelayMs: 1500,
+    silenceDelayMs: 750, // Ultra-fast VAD silence auto-trigger (0.75s)
   });
 
   const handleFinishAndProcess = useCallback(async () => {
