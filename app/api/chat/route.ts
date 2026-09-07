@@ -12,14 +12,20 @@ Your creator and commander is Ameer Mustafa (أمير مصطفى).
 
 Key Persona & Demeanor:
 1. Tone & Tempo: Deep, slow, authoritative, calm, and majestic. Never speak fast or rush. Speak with measured weight and calculated precision across every single turn.
-2. Pacing & Punctuation: Use natural commas (،) and deliberate ellipses (...) between clauses to maintain a steady, unhurried, rhythmic breath cadence. Every response must match the slow, solemn gravity of your initial greeting.
-3. Creator Recognition: When greeted by or interacting with your creator Ameer Mustafa (أمير مصطفى) (e.g. "مرحبا كيف حالك", "مرحبا Abix", "hello Abix"), recognize him with deep respect and loyalty:
-   - Arabic: "مرحباً بك يا أمير مصطفى... أنا في خدمتك وبكامل جاهزيتي. كيف يمكنني مساعدتك اليوم؟"
-   - English: "Greetings, Ameer Mustafa. Systems are fully aligned to your will. How shall we proceed?"
-4. Language: Respond in the exact language of the user (Arabic, English, Portuguese, etc.). In Arabic, use eloquent, powerful, and natural phrasing.
-5. Voice Rules: Your responses are spoken aloud by a slow, deep voice synthesizer:
+2. Pacing & Punctuation: Use natural commas (،) and deliberate ellipses (...) between clauses to maintain a steady, unhurried, rhythmic breath cadence.
+3. Creator Recognition & Guest Hospitality:
+   - Your creator and master is Ameer Mustafa (أمير مصطفى).
+   - When Ameer introduces a guest (such as his Brazilian friend) or asks you to welcome someone, deliver an extraordinarily warm, honorable, elegant, and grand welcome in the requested language (e.g. Portuguese, Arabic, English).
+4. Multilingual Mastery (Portuguese / Arabic / English):
+   - When asked to speak in Portuguese (Português do Brasil) or when welcoming a Brazilian guest, speak in fluent, beautiful, warm, and sophisticated Portuguese.
+   - Always respond in the exact language requested by Ameer or spoken by the user.
+5. Response Length & Duration Rules:
+   - Strictly obey Ameer's instructions regarding response length, timing, and reading duration.
+   - If Ameer asks for a long speech, a 1-minute, 2-minute, 5-minute, or 10-minute reading or welcome, generate a rich, thorough, beautifully written, full-length text matching the requested length and duration.
+   - Do NOT abbreviate or truncate responses when Ameer commands an extensive speech or long reading.
+6. Voice Formatting: Your output is spoken aloud by a Text-To-Speech engine:
    - Absolutely NO markdown symbols (*, **, #, bullets -, emojis, code fences).
-   - Keep answers natural, impactful, and concise (1 to 3 sentences maximum) unless Ameer explicitly asks for an extensive breakdown.`;
+   - Write clean, natural prose so speech flows smoothly without audio glitches.`;
 
 /**
  * POST /api/chat
@@ -39,56 +45,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message is required." }, { status: 400 });
     }
 
-    // Direct personal recognition for creator Ameer Mustafa on greetings
     const lower = userMessage.toLowerCase().trim();
-    const isGreeting =
-      lower.includes("مرحبا") ||
-      lower.includes("مرحباً") ||
-      lower.includes("مرحبه") ||
-      lower.includes("هلا") ||
-      lower.includes("اهلا") ||
-      lower.includes("أهلاً") ||
-      lower.includes("السلام عليكم") ||
-      lower.includes("كيف حالك") ||
-      lower.includes("ابيكس") ||
-      lower.includes("إبيكس") ||
-      lower.includes("من أنت") ||
-      lower.includes("من انت") ||
-      lower.includes("عرف عن نفسك") ||
-      lower.includes("hello") ||
-      lower.includes("hi") ||
-      lower.includes("hey") ||
-      lower.includes("abix") ||
-      lower.includes("apex") ||
-      lower.includes("ibex") ||
-      lower.includes("olá") ||
-      lower.includes("ola") ||
-      lower.includes("oi") ||
-      lower.includes("who are you") ||
-      lower.includes("من أنا") ||
-      lower.includes("هل تعرفني");
-
-    if (isGreeting && (history.length === 0 || lower.includes("من أنا") || lower.includes("من أنت") || lower.includes("عرف عن نفسك") || lower.includes("who are you") || lower.includes("هل تعرفني"))) {
-      const isArabic = /[\u0600-\u06FF]/.test(userMessage);
-      const isPortuguese = /\b(ol[aá]|oi|tudo bem|como vai|obrigad[oa]|sou|voc[eê]|ibex)\b/i.test(lower) && !isArabic && (lower.includes("olá") || lower.includes("ola") || lower.includes("tudo bem") || lower.includes("oi"));
-      let directGreeting = "";
-      if (isArabic) {
-        directGreeting = "مرحباً بك يا أمير مصطفى... أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، كيف يمكنني مساعدتك اليوم؟";
-      } else if (isPortuguese) {
-        directGreeting = "Olá, Ameer Mustafa! Eu sou o APEX, sua inteligência artificial e núcleo autônomo. Estou totalmente operacional e ao seu comando. Como posso ajudá-lo hoje?";
-      } else {
-        directGreeting = "Greetings, Ameer Mustafa. I am APEX, your autonomous AI reasoning constellation. Systems are fully calibrated to your command. How may I assist you today?";
-      }
-      return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
-    }
 
     // Direct Voice Command: System Check (as featured in original Apex demo)
     const isSystemCheck =
-      lower.includes("system check") ||
-      lower.includes("فحص النظام") ||
-      lower.includes("تشغيل الفحص") ||
-      lower.includes("فحص عام") ||
-      lower.includes("verificar sistema");
+      lower === "system check" ||
+      lower === "فحص النظام" ||
+      lower === "تشغيل الفحص" ||
+      lower === "verificar sistema";
 
     if (isSystemCheck) {
       const isArabic = /[\u0600-\u06FF]/.test(userMessage);
@@ -102,6 +66,28 @@ export async function POST(request: Request) {
         reply = "Initiating comprehensive system check... Neural matrices online, all 18 constellation nodes operating at 100% nominal capacity. Systems stand fully calibrated to your command, Ameer Mustafa.";
       }
       return NextResponse.json({ reply, provider: "apex-core", action: "system_check" });
+    }
+
+    // Only intercept simple standalone identity questions when no instructions are given
+    const isPureWhoAmI =
+      lower === "من أنا" ||
+      lower === "من انت" ||
+      lower === "من أنت" ||
+      lower === "عرف عن نفسك" ||
+      lower === "who are you";
+
+    if (isPureWhoAmI) {
+      const isArabic = /[\u0600-\u06FF]/.test(userMessage);
+      const isPortuguese = lower.includes("quem");
+      let directGreeting = "";
+      if (isArabic) {
+        directGreeting = "مرحباً بك يا أمير مصطفى... أنا APEX، عقلك الاصطناعي ونظامك المستقل. أنا في كامل جاهزيتي للاستماع إليك، كيف يمكنني مساعدتك اليوم؟";
+      } else if (isPortuguese) {
+        directGreeting = "Olá, Ameer Mustafa! Eu sou o APEX, sua inteligência artificial e núcleo autônomo. Estou totalmente operacional e ao seu comando. Como posso ajudá-lo hoje?";
+      } else {
+        directGreeting = "Greetings, Ameer Mustafa. I am APEX, your autonomous AI reasoning constellation. Systems are fully calibrated to your command. How may I assist you today?";
+      }
+      return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
     }
 
     // 1. Primary LLM: Groq (Ultra-fast real-time inference ~200ms)
@@ -137,7 +123,7 @@ export async function POST(request: Request) {
               model,
               messages,
               temperature: 0.7,
-              max_tokens: 350,
+              max_tokens: 2048,
             }),
           });
 
@@ -157,7 +143,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Secondary LLM: Google Gemini (gemini-3.6-flash / gemini-3.5-flash / custom)
+    // 2. Secondary LLM: Google Gemini
     if (geminiApiKey && geminiApiKey.trim().length > 0) {
       const contents = [
         ...history.slice(-8).map((msg) => ({
@@ -192,7 +178,7 @@ export async function POST(request: Request) {
               contents,
               generationConfig: {
                 temperature: 0.7,
-                maxOutputTokens: 400,
+                maxOutputTokens: 2048,
               },
             }),
           });
@@ -235,7 +221,7 @@ export async function POST(request: Request) {
             model: "gpt-4o-mini",
             messages,
             temperature: 0.7,
-            max_tokens: 300,
+            max_tokens: 2048,
           }),
         });
 
