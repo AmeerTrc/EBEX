@@ -156,11 +156,12 @@ export async function POST(request: Request) {
     // 1. Primary LLM: Groq (Ultra-fast real-time inference ~150ms)
     if (groqApiKey && groqApiKey.trim().length > 0) {
       const groqCandidateModels = [
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-120b",
+        "allam-2-7b",
+        "groq/compound",
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
-        "openai/gpt-oss-120b",
-        "openai/gpt-oss-20b",
-        "groq/compound",
       ];
 
       for (const model of groqCandidateModels) {
