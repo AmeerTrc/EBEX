@@ -76,6 +76,20 @@ function Clock() {
 
 export default function ApexOverviewPanel() {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const handleToggle = (e: Event) => {
+      const customEvent = e as CustomEvent<{ open?: boolean }>;
+      if (typeof customEvent.detail?.open === "boolean") {
+        setOpen(customEvent.detail.open);
+      } else {
+        setOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("apex-toggle-overview", handleToggle);
+    return () => window.removeEventListener("apex-toggle-overview", handleToggle);
+  }, []);
+
   const FIL = open ? 480 : 320; // filament width - grows when lit
 
   /**

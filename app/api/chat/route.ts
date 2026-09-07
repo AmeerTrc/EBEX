@@ -82,6 +82,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
     }
 
+    // Direct Voice Command: System Check (as featured in original Apex demo)
+    const isSystemCheck =
+      lower.includes("system check") ||
+      lower.includes("فحص النظام") ||
+      lower.includes("تشغيل الفحص") ||
+      lower.includes("فحص عام") ||
+      lower.includes("verificar sistema");
+
+    if (isSystemCheck) {
+      const isArabic = /[\u0600-\u06FF]/.test(userMessage);
+      const isPortuguese = lower.includes("sistema") || lower.includes("verificar");
+      let reply = "";
+      if (isArabic) {
+        reply = "بدء فحص النظام الشامل... مصفوفات الذكاء متصلة، العقد التشغيلية تعمل بكفاءة كاملة بنسبة 100%. المحطة في أقصى درجات الجاهزية لأوامرك يا أمير مصطفى.";
+      } else if (isPortuguese) {
+        reply = "Iniciando verificação do sistema... Todas as matrizes neurais estão conectadas e operando a 100%. Sistemas totalmente operacionais ao seu comando, Ameer Mustafa.";
+      } else {
+        reply = "Initiating comprehensive system check... Neural matrices online, all 18 constellation nodes operating at 100% nominal capacity. Systems stand fully calibrated to your command, Ameer Mustafa.";
+      }
+      return NextResponse.json({ reply, provider: "apex-core", action: "system_check" });
+    }
+
     // 1. Primary LLM: Groq (Ultra-fast real-time inference ~200ms)
     if (groqApiKey && groqApiKey.trim().length > 0) {
       const groqCandidateModels = [

@@ -230,6 +230,30 @@ export function AgentOverview({ sel, onClose }: { sel: NodeSel; onClose: () => v
   );
 }
 
+function playCyberChime() {
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(330, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.16);
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.38);
+
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.65);
+  } catch {}
+}
+
 /* ── The world ── */
 export default function ApexWorld() {
   const [selected, setSelected] = useState<NodeSel | null>(null);
@@ -386,7 +410,8 @@ export default function ApexWorld() {
         return;
       }
 
-      const { reply } = await chatRes.json();
+      const chatData = await chatRes.json();
+      const reply = chatData?.reply;
       if (!reply) {
         if (isSessionActiveRef.current) {
           const ok = await startRecording();
@@ -397,6 +422,23 @@ export default function ApexWorld() {
         }
         isProcessingRef.current = false;
         return;
+      }
+
+      // Trigger Cyber Chime & open Overview Lamp Panel upon "system check"
+      if (
+        chatData?.action === "system_check" ||
+        lowerQ.includes("system check") ||
+        lowerQ.includes("فحص النظام") ||
+        lowerQ.includes("تشغيل الفحص")
+      ) {
+        playCyberChime();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("apex-toggle-overview", { detail: { open: true } }));
+        }
+      } else if (lowerQ.includes("إغلاق اللوحة") || lowerQ.includes("close panel")) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("apex-toggle-overview", { detail: { open: false } }));
+        }
       }
 
       // Update multi-turn session history and display full APEX response
