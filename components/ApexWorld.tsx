@@ -254,6 +254,48 @@ function playCyberChime() {
   } catch {}
 }
 
+function isHallucinatedSilence(text: string): boolean {
+  if (!text || text.trim().length < 2) return true;
+
+  const lower = text.toLowerCase().trim();
+
+  // Known Whisper silence artifacts & noise hallucinations
+  const hallucinations = [
+    "thank you",
+    "thanks for watching",
+    "thank you for watching",
+    "subtitles",
+    "amara.org",
+    "subscribe",
+    "you",
+    "bye",
+    "mbc",
+    "اشترك",
+    "شكرا للمشاهدة",
+    "شكرا",
+    "silence",
+    "music",
+    "audio",
+    "sound",
+    "chtt",
+    "olá",
+    "obrigado",
+    "obrigada",
+  ];
+
+  // Exact match or contains hallucination phrase on short text (<22 chars)
+  if (lower.length < 22) {
+    for (const h of hallucinations) {
+      if (lower === h || lower.replace(/[^a-z0-9]/g, "") === h) return true;
+    }
+  }
+
+  // Single word under 3 characters (e.g. "a", "oh", "um", "uh", "yo")
+  if (lower.split(/\s+/).length === 1 && lower.length <= 3) return true;
+
+  return false;
+}
+
 /* ── The world ── */
 export default function ApexWorld() {
   const [selected, setSelected] = useState<NodeSel | null>(null);
@@ -405,12 +447,15 @@ export default function ApexWorld() {
       // Strip brackets like [music], (laughter), (silence)
       const userQuestion = rawText.replace(/\[.*?\]|\(.*?\)/g, "").trim();
 
-      if (!userQuestion || userQuestion.length < 2) {
+      if (isHallucinatedSilence(userQuestion)) {
         if (isSessionActiveRef.current) {
           setShowState("listening");
           setStatusMessage("Listening... Speak to APEX");
           await startRecording();
         }
+        isProcessingRef.current = false;
+        return;
+      }
         isProcessingRef.current = false;
         return;
       }

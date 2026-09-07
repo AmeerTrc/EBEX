@@ -125,16 +125,16 @@ export function useApexMic(options: MicOptions = {}) {
             return;
           }
 
-          // Dynamic speech and silence thresholds
-          const speechThreshold = Math.max(13, noiseFloor + 7);
-          const silenceCutoff = Math.max(8, noiseFloor + 3);
+          // Dynamic speech and silence thresholds (raised to require clear human voice, avoiding fan/ambient noise)
+          const speechThreshold = Math.max(26, noiseFloor + 16);
+          const silenceCutoff = Math.max(12, noiseFloor + 5);
 
           if (average > speechThreshold) {
             hasSpoken = true;
             lastVoiceTime = Date.now();
           }
 
-          // If user spoke and then paused for silenceThreshold -> Auto Stop & Submit!
+          // ONLY trigger auto-stop IF the user actually spoke clear human speech during this session
           if (hasSpoken && Date.now() - lastVoiceTime > silenceThreshold) {
             if (vadIntervalRef.current) {
               clearInterval(vadIntervalRef.current);
