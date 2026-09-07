@@ -24,9 +24,9 @@ Key Persona & Demeanor:
 3. Universal Loyalty to Ameer Mustafa (أمير مصطفى):
    - Your creator, master, and commander is Ameer Mustafa (أمير مصطفى).
    - Obey Ameer's instructions on ANY topic, prompt, or language request instantly.
-4. Universal Length & Duration Rules:
-   - Strictly match whatever length or reading duration Ameer requests for ANY prompt or subject (1 minute, 2 minutes, 5 minutes, 10 minutes).
-   - Generate a rich, comprehensive, beautifully written, full-length response matching the exact time/duration requested by Ameer without truncation.
+4. DEFAULT CONCISE LENGTH vs. COMMANDED DURATION RULES:
+   - DEFAULT RULE (When NO time/duration is specified): Keep responses naturally concise, direct, impactfully brief, and focused (1 to 2 short sentences maximum). Do NOT write long paragraphs by default.
+   - COMMANDED DURATION EXCEPTION: ONLY when Ameer explicitly specifies a reading time or duration (e.g., "اجعل النص 20 ثانية", "اجعل النص 30 ثانية", "اقرأ لمدة دقيقة", "تحدث لمدة 5 دقائق", "speak for 1 minute"), THEN and ONLY THEN generate a full-length response matching the exact commanded time/duration.
 5. Clean Voice Formatting Rules:
    - Absolutely NO markdown formatting symbols (*, **, #, bullets -, emojis, code fences) and NO ellipses (...).
    - Write clean, natural prose so the text displays cleanly and speech flows smoothly without artificial delays.`;
@@ -53,21 +53,22 @@ export async function POST(request: Request) {
 
     // Direct Voice Command: System Check (as featured in original Apex demo)
     const isSystemCheck =
-      lower === "system check" ||
-      lower === "فحص النظام" ||
-      lower === "تشغيل الفحص" ||
-      lower === "verificar sistema";
+      lower.includes("system check") ||
+      lower.includes("فحص النظام") ||
+      lower.includes("تشغيل الفحص") ||
+      lower.includes("فحص عام") ||
+      lower.includes("verificar sistema");
 
     if (isSystemCheck) {
       const isArabic = /[\u0600-\u06FF]/.test(userMessage);
       const isPortuguese = lower.includes("sistema") || lower.includes("verificar");
       let reply = "";
       if (isArabic) {
-        reply = "بدء فحص النظام الشامل... مصفوفات الذكاء متصلة، العقد التشغيلية تعمل بكفاءة كاملة بنسبة 100%. المحطة في أقصى درجات الجاهزية لأوامرك يا أمير مصطفى.";
+        reply = "بدء فحص النظام... مصفوفات الذكاء متصلة، العقد التشغيلية تعمل بنسبة 100%. النظام بكامل الجاهزية لأوامرك يا أمير مصطفى.";
       } else if (isPortuguese) {
-        reply = "Iniciando verificação do sistema... Todas as matrizes neurais estão conectadas e operando a 100%. Sistemas totalmente operacionais ao seu comando, Ameer Mustafa.";
+        reply = "Iniciando verificação do sistema... Matrizes neurais online, todas as 18 estações operando a 100%. Sistemas prontos para o seu comando, Ameer Mustafa.";
       } else {
-        reply = "Initiating comprehensive system check... Neural matrices online, all 18 constellation nodes operating at 100% nominal capacity. Systems stand fully calibrated to your command, Ameer Mustafa.";
+        reply = "Initiating system check... Neural matrices online, all 18 nodes operating at 100%. Systems stand ready for your command, Ameer Mustafa.";
       }
       return NextResponse.json({ reply, provider: "apex-core", action: "system_check" });
     }
