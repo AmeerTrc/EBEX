@@ -277,6 +277,59 @@ export default function ApexWorld() {
   const [lastApexText, setLastApexText] = useState<string | null>(null);
   const [voiceSpeed, setVoiceSpeed] = useState<number>(0.70);
 
+  // Draggable HUD Position state
+  const [hudPos, setHudPos] = useState<{ x: number; y: number } | null>(null);
+  const hudDragRef = useRef<{ sx: number; sy: number } | null>(null);
+
+  const startHudDrag = (clientX: number, clientY: number, target: HTMLElement) => {
+    if (target.tagName === "BUTTON" || target.closest("button")) return;
+    const currentX =
+      hudPos?.x ?? Math.max(16, (window.innerWidth - Math.min(640, window.innerWidth * 0.9)) / 2);
+    const currentY = hudPos?.y ?? Math.max(16, window.innerHeight - 180);
+
+    hudDragRef.current = { sx: clientX - currentX, sy: clientY - currentY };
+  };
+
+  const onHudMouseDown = (e: React.MouseEvent) => {
+    startHudDrag(e.clientX, e.clientY, e.target as HTMLElement);
+    const move = (ev: MouseEvent) => {
+      if (hudDragRef.current) {
+        setHudPos({
+          x: ev.clientX - hudDragRef.current.sx,
+          y: ev.clientY - hudDragRef.current.sy,
+        });
+      }
+    };
+    const up = () => {
+      hudDragRef.current = null;
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  };
+
+  const onHudTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    startHudDrag(touch.clientX, touch.clientY, e.target as HTMLElement);
+    const move = (ev: TouchEvent) => {
+      if (hudDragRef.current && ev.touches[0]) {
+        setHudPos({
+          x: ev.touches[0].clientX - hudDragRef.current.sx,
+          y: ev.touches[0].clientY - hudDragRef.current.sy,
+        });
+      }
+    };
+    const end = () => {
+      hudDragRef.current = null;
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", end);
+    };
+    document.addEventListener("touchmove", move);
+    document.addEventListener("touchend", end);
+  };
+
   const { speak, stop, isPlaying } = useApexVoice();
   const [isSessionActive, setIsSessionActive] = useState(false);
   const isSessionActiveRef = useRef(false);
@@ -633,14 +686,17 @@ export default function ApexWorld() {
         }}
       />
 
-      {/* Minimal Sleek Caption HUD (Positioned safely below orb core) */}
+      {/* Minimal Sleek Draggable Caption HUD */}
       {(isSessionActive || statusMessage || orbState !== "idle") && (
         <div
+          onMouseDown={onHudMouseDown}
+          onTouchStart={onHudTouchStart}
           style={{
-            position: "absolute",
-            bottom: 110,
-            left: "50%",
-            transform: "translateX(-50%)",
+            position: "fixed",
+            left: hudPos ? hudPos.x : "50%",
+            top: hudPos ? hudPos.y : undefined,
+            bottom: hudPos ? undefined : 110,
+            transform: hudPos ? "none" : "translateX(-50%)",
             width: "min(640px, 90vw)",
             display: "flex",
             flexDirection: "column",
@@ -657,13 +713,15 @@ export default function ApexWorld() {
                 : "rgba(0, 229, 255, 0.35)"
             }`,
             borderRadius: 14,
-            zIndex: 25,
+            zIndex: 35,
             boxShadow: "0 10px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 229, 255, 0.1)",
             pointerEvents: "auto",
-            transition: "all 0.3s ease",
+            cursor: "grab",
+            userSelect: "none",
+            transition: hudDragRef.current ? "none" : "border-color 0.3s ease, background 0.3s ease",
           }}
         >
-          {/* Header Row: Speaker identity + Minimal Status */}
+          {/* Header Row: Speaker identity + Drag indicator + Minimal Status */}
           <div
             style={{
               display: "flex",
@@ -676,6 +734,18 @@ export default function ApexWorld() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  cursor: "grab",
+                  color: "rgba(255, 255, 255, 0.35)",
+                  fontSize: "0.75rem",
+                  lineHeight: 1,
+                  marginRight: 2,
+                }}
+                title="إسحب لتحريك الإطار في أي مكان"
+              >
+                ⠿
+              </span>
               <span
                 style={{
                   width: 7,
@@ -722,7 +792,8 @@ export default function ApexWorld() {
               {isSessionActive && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setIsSessionActive(false);
                     isSessionActiveRef.current = false;
                     stop();
