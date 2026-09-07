@@ -51,19 +51,17 @@ export async function POST(request: Request) {
 
     const requestedSpeed = typeof body?.speed === "number" ? Math.max(0.70, Math.min(1.0, body.speed)) : 0.70;
 
-    // Add extra deliberate cadence pauses to periods, commas, and clause breaks so voice is never fast
-    let pacedText = text
-      .replace(/([.!؟?]+)\s*/g, "$1... ")
-      .replace(/([,،])\s*/g, "$1... ");
+    // Clean text: strip any artificial ellipses or multiple dots so text reads naturally without artificial delays
+    let cleanText = text.replace(/\.{2,}/g, ".").trim();
 
     const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
 
     const voiceSettings = {
-      stability: 0.88,          // High stability = deep, steady, calm, unhurried voice
-      similarity_boost: 0.92,
-      style: 0.0,               // 0 style removes fast dramatic rushes
+      stability: 0.82,
+      similarity_boost: 0.90,
+      style: 0.0,
       use_speaker_boost: true,
-      speed: Math.min(0.70, requestedSpeed), // Lock to slow 0.70 speed for calm, stately delivery
+      speed: Math.min(0.70, requestedSpeed), // Pure, calm, slow speech rate without artificial dot pauses
     };
 
     const response = await fetch(elevenLabsUrl, {
@@ -75,7 +73,7 @@ export async function POST(request: Request) {
         "User-Agent": "Mozilla/5.0",
       },
       body: JSON.stringify({
-        text: pacedText,
+        text: cleanText,
         model_id: "eleven_multilingual_v2",
         voice_settings: voiceSettings,
       }),
