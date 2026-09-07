@@ -135,7 +135,7 @@ export function useApexMic(options: MicOptions = {}) {
           }
 
           // If user spoke and then paused for silenceThreshold -> Auto Stop & Submit!
-          if (hasSpoken && average <= silenceCutoff && Date.now() - lastVoiceTime > silenceThreshold) {
+          if (hasSpoken && Date.now() - lastVoiceTime > silenceThreshold) {
             if (vadIntervalRef.current) {
               clearInterval(vadIntervalRef.current);
               vadIntervalRef.current = null;

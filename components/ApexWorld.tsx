@@ -412,40 +412,17 @@ export default function ApexWorld() {
       setLastApexText(reply);
       setStatusMessage(null);
 
-      // Enable real-time voice interruption monitoring while APEX is speaking
-      let wasInterrupted = false;
+      // Ensure microphone is completely stopped during speech playback so speakers don't echo or self-interrupt
+      stopRecording();
 
-      startInterruptionMonitoring(async () => {
-        wasInterrupted = true;
-        // 1. Immediately cut off APEX's voice!
-        stop();
-        // 2. Clear processing lock so interrupted speech is accepted
-        isProcessingRef.current = false;
-        // 3. Switch state to listening
-        setShowState("listening");
-        setStatusMessage("Listening... Speak now");
-        // 4. Start recording user's new speech immediately!
-        await startRecording();
-      });
-
-      // Synthesize and play reply using ElevenLabs (waits until speech finishes or resolves false on interruption)
+      // Synthesize and play reply completely from start to finish
       await speak(
         reply,
         (state) => {
-          if (!wasInterrupted) {
-            setShowState(state);
-          }
+          setShowState(state);
         },
         voiceSpeed
       );
-
-      // Stop interruption monitoring once speech is finished
-      stopInterruptionMonitoring();
-
-      // If user interrupted during playback, the interruption handler has already started recording
-      if (wasInterrupted) {
-        return;
-      }
 
       // If user instructed goodbye, power down into standby
       if (isGoodbye) {
@@ -457,12 +434,12 @@ export default function ApexWorld() {
         return;
       }
 
-      // Hands-free continuous loop: automatically start listening again for next question!
+      // Hands-free continuous loop: as soon as speech finishes, automatically open microphone for next question!
       if (isSessionActiveRef.current) {
         const ok = await startRecording();
         if (ok && isSessionActiveRef.current) {
           setShowState("listening");
-          setStatusMessage("Listening... Speak now");
+          setStatusMessage("Listening... Speak to APEX");
         }
       }
     } catch (err) {
@@ -477,7 +454,7 @@ export default function ApexWorld() {
     } finally {
       isProcessingRef.current = false;
     }
-  }, [history, speak, stop, startRecording, stopRecording, startInterruptionMonitoring, stopInterruptionMonitoring, voiceSpeed]);
+  }, [history, speak, stop, startRecording, stopRecording, voiceSpeed]);
 
   onSilenceRef.current = handleFinishAndProcess;
 
