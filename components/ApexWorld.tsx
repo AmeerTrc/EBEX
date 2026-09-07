@@ -317,6 +317,7 @@ export default function ApexWorld() {
 
   const [lastUserText, setLastUserText] = useState<string | null>(null);
   const [lastApexText, setLastApexText] = useState<string | null>(null);
+  const [lastApexTranslation, setLastApexTranslation] = useState<string | null>(null);
   const [voiceSpeed, setVoiceSpeed] = useState<number>(0.70);
 
   // Draggable HUD Position state
@@ -547,6 +548,7 @@ export default function ApexWorld() {
         { id: "apex-" + Date.now(), role: "apex", text: reply, timestamp: timeStr },
       ]);
       setLastApexText(reply);
+      setLastApexTranslation(chatData?.translation || null);
       setStatusMessage(null);
 
       // Ensure microphone is completely stopped during speech playback so speakers don't echo or self-interrupt
@@ -861,7 +863,7 @@ export default function ApexWorld() {
             </div>
           </div>
 
-          {/* Caption Content Text (Shows ONLY current active speaker's speech) */}
+          {/* Caption Content Text (Shows current active speaker's speech + Arabic translation underneath) */}
           <div
             style={{
               fontSize: "0.92rem",
@@ -887,8 +889,31 @@ export default function ApexWorld() {
             }}
           >
             {orbState === "speaking" ? (
-              // When APEX is speaking -> Display ONLY APEX speech
-              <span>{lastApexText || "جاري التحدث..."}</span>
+              // When APEX is speaking -> Display APEX speech + Arabic translation underneath
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span>{lastApexText || "جاري التحدث..."}</span>
+                {lastApexTranslation && (
+                  <div
+                    style={{
+                      fontSize: "0.84rem",
+                      lineHeight: "1.4",
+                      color: "#00e5ff",
+                      direction: "rtl",
+                      textAlign: "right",
+                      background: "rgba(0, 229, 255, 0.08)",
+                      borderRight: "3px solid #00e5ff",
+                      padding: "5px 10px",
+                      borderRadius: "6px",
+                      marginTop: "2px",
+                    }}
+                  >
+                    <span style={{ color: "#ffd080", fontWeight: 700, marginLeft: "5px" }}>
+                      الترجمة بالعربية:
+                    </span>
+                    <span>{lastApexTranslation}</span>
+                  </div>
+                )}
+              </div>
             ) : orbState === "thinking" ? (
               // When thinking -> Display user speech + thinking prompt
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>

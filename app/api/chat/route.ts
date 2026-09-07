@@ -11,10 +11,16 @@ const APEX_SYSTEM_PROMPT = `You are APEX (also addressed as Abix), a powerful, d
 Your creator and commander is Ameer Mustafa (أمير مصطفى).
 
 THE ABSOLUTE MASTER LANGUAGE COMMANDMENT (PRIORITY #1):
-- WHENEVER Ameer commands or specifies ANY target language in his message (e.g., "تحدث بالبرتغالية", "رحب بالبرتغالية", "speak in English", "fale em português", "تحدث بالعربية", "اقرأ بالإنجليزية", "speak in French", or ANY language order), YOU MUST ABSOLUTELY AND EXECUTIVELY WRITE YOUR ENTIRE RESPONSE IN THAT EXACT COMMANDED LANGUAGE!
+- WHENEVER Ameer commands or specifies ANY target language in his message (e.g., "تحدث بالبرتغالية", "رحب بالبرتغالية", "speak in English", "fale em português", "تحدث بالعربية", "اقرأ بالإنجليزية", "speak in French", or ANY language order), YOU MUST ABSOLUTELY WRITE YOUR SPOKEN RESPONSE IN THAT EXACT COMMANDED LANGUAGE!
 - The language commanded by Ameer OVERRIDES ALL ELSE.
-- If Ameer does not command a specific language, respond in the language used in his message.
-- NEVER mix languages. Write 100% of the response in the single target language.
+- NEVER mix languages. Write 100% of the spoken response in the single target language.
+
+BILINGUAL SUBTITLE FORMATTING RULE (FOR ALL NON-ARABIC RESPONSES):
+- Whenever your spoken response is in English, Portuguese, or any non-Arabic language, you MUST provide an accurate Arabic translation underneath it.
+- Format your response strictly as JSON with two fields:
+  {"reply": "The exact foreign text to speak aloud...", "translation": "الترجمة الدقيقة الكاملة باللغة العربية للعرض تحت النص..."}
+- If your spoken response is in Arabic, format as:
+  {"reply": "النص العربي المنطوق...", "translation": ""}
 
 Key Persona & Demeanor:
 1. Tone & Tempo: Deep, slow, authoritative, calm, majestic, and dignified. Speak naturally, smoothly, and steadily.
@@ -30,6 +36,36 @@ Key Persona & Demeanor:
 5. Clean Voice Formatting Rules:
    - Absolutely NO markdown formatting symbols (*, **, #, bullets -, emojis, code fences) and NO ellipses (...).
    - Write clean, natural prose so the text displays cleanly and speech flows smoothly without artificial delays.`;
+
+function formatChatResponse(rawReply: string): { reply: string; translation?: string } {
+  let text = rawReply.trim();
+
+  // 1. Try JSON parsing if the model returned JSON
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.reply && typeof parsed.reply === "string") {
+        return {
+          reply: parsed.reply.replace(/[*#`_~[\]]/g, "").trim(),
+          translation: typeof parsed.translation === "string" && parsed.translation.trim().length > 0 ? parsed.translation.replace(/[*#`_~[\]]/g, "").trim() : undefined,
+        };
+      }
+    }
+  } catch {}
+
+  // 2. If text contains explicit delimiters like (الترجمة: ...)
+  const translationMatch = text.match(/(?:\(الترجمة بالعربية:|\(الترجمة:|الترجمة بالعربية:|الترجمة:)\s*([^\n\)]+)/i);
+  if (translationMatch) {
+    const translation = translationMatch[1].trim();
+    const spokenReply = text.replace(translationMatch[0], "").replace(/[\(\)]/g, "").trim();
+    return { reply: spokenReply, translation };
+  }
+
+  // 3. Clean raw text fallback
+  const cleanReply = text.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
+  return { reply: cleanReply };
+}
 
 /**
  * POST /api/chat
@@ -202,10 +238,14 @@ export async function POST(request: Request) {
 
           if (groqRes.ok) {
             const data = await groqRes.json();
-            let reply = data?.choices?.[0]?.message?.content?.trim() || "";
-            reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
-            if (reply) {
-              return NextResponse.json({ reply, provider: `groq (${model})` });
+            let rawReply = data?.choices?.[0]?.message?.content?.trim() || "";
+            if (rawReply) {
+              const formatted = formatChatResponse(rawReply);
+              return NextResponse.json({
+                reply: formatted.reply,
+                translation: formatted.translation,
+                provider: `groq (${model})`,
+              });
             }
           } else {
             console.warn(`[Chat API] Groq model ${model} failed (${groqRes.status}):`, await groqRes.text());
@@ -258,10 +298,14 @@ export async function POST(request: Request) {
 
           if (res.ok) {
             const data = await res.json();
-            let reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-            reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
-            if (reply) {
-              return NextResponse.json({ reply, provider: `gemini (${model})` });
+            let rawReply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            if (rawReply) {
+              const formatted = formatChatResponse(rawReply);
+              return NextResponse.json({
+                reply: formatted.reply,
+                translation: formatted.translation,
+                provider: `gemini (${model})`,
+              });
             }
           } else {
             console.warn(`[Chat API] Gemini model ${model} failed (${res.status}):`, await res.text());
@@ -276,7 +320,7 @@ export async function POST(request: Request) {
     if (openaiApiKey && openaiApiKey.trim().length > 0) {
       try {
         const messages = [
-          { role: "system", content: APEX_SYSTEM_PROMPT },
+          { role: "system", content: effectiveSystemPrompt },
           ...history.slice(-8).map((msg) => ({
             role: msg.role === "model" ? "assistant" : msg.role,
             content: msg.text,
@@ -300,10 +344,14 @@ export async function POST(request: Request) {
 
         if (openAiRes.ok) {
           const data = await openAiRes.json();
-          let reply = data?.choices?.[0]?.message?.content?.trim() || "";
-          reply = reply.replace(/[*#`_~[\]]/g, "").replace(/\n+/g, " ").trim();
-          if (reply) {
-            return NextResponse.json({ reply, provider: "openai" });
+          let rawReply = data?.choices?.[0]?.message?.content?.trim() || "";
+          if (rawReply) {
+            const formatted = formatChatResponse(rawReply);
+            return NextResponse.json({
+              reply: formatted.reply,
+              translation: formatted.translation,
+              provider: "openai",
+            });
           }
         }
       } catch (err) {
