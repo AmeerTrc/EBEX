@@ -330,16 +330,9 @@ export default function ApexWorld() {
 
       if (!userQuestion || userQuestion.length < 2) {
         if (isSessionActiveRef.current) {
-          setStatusMessage("Didn't catch that, listening again...");
-          setTimeout(async () => {
-            if (isSessionActiveRef.current) {
-              const ok = await startRecording();
-              if (ok && isSessionActiveRef.current) {
-                setShowState("listening");
-                setStatusMessage("Listening... Speak to APEX");
-              }
-            }
-          }, 800);
+          setShowState("listening");
+          setStatusMessage("Listening... Speak to APEX");
+          await startRecording();
         }
         isProcessingRef.current = false;
         return;
@@ -489,27 +482,37 @@ export default function ApexWorld() {
   onSilenceRef.current = handleFinishAndProcess;
 
   const handleOrbClick = async () => {
-    // 1. If session is ALREADY ACTIVE: Glowing orb is clicked to TURN OFF (إطفاء)
-    if (isSessionActiveRef.current) {
-      setIsSessionActive(false);
-      isSessionActiveRef.current = false;
+    // 1. If APEX is currently speaking: Tap immediately interrupts APEX and opens mic!
+    if (showState === "speaking") {
       stop();
-      cancelRecording();
-      setShowState("idle");
-      setLastUserText(null);
-      setLastApexText(null);
-      setStatusMessage("APEX Standby");
-      setTimeout(() => setStatusMessage(null), 2500);
+      isProcessingRef.current = false;
+      setShowState("listening");
+      setStatusMessage("Listening... Speak to APEX");
+      await startRecording();
       return;
     }
 
-    // 2. If session is OFF: Glowing orb is clicked to TURN ON (تشغيل)
+    // 2. If APEX is currently listening and recording: Tap immediately submits speech (Push-to-Send)!
+    if (showState === "listening" && isRecording) {
+      handleFinishAndProcess();
+      return;
+    }
+
+    // 3. If APEX is currently thinking: Tap cancels thinking and opens mic!
+    if (showState === "thinking") {
+      isProcessingRef.current = false;
+      setShowState("listening");
+      setStatusMessage("Listening... Speak to APEX");
+      await startRecording();
+      return;
+    }
+
+    // 4. If session is idle / off: Turn ON and start listening!
     setIsSessionActive(true);
     isSessionActiveRef.current = true;
     setShowState("listening");
     setStatusMessage("APEX Online · Listening...");
 
-    // Immediately open microphone silently and wait for user to greet in their language
     const ok = await startRecording();
     if (ok && isSessionActiveRef.current) {
       setShowState("listening");
@@ -746,6 +749,44 @@ export default function ApexWorld() {
                   }}
                 >
                   مسح / Clear
+                </button>
+              )}
+
+              {/* Standby / Shutdown Toggle */}
+              {isSessionActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSessionActive(false);
+                    isSessionActiveRef.current = false;
+                    stop();
+                    cancelRecording();
+                    setShowState("idle");
+                    setStatusMessage("APEX Standby");
+                    setTimeout(() => setStatusMessage(null), 2500);
+                  }}
+                  title="إيقاف الجلسة والعودة للوضع الخامل"
+                  style={{
+                    background: "rgba(255, 68, 68, 0.12)",
+                    border: "1px solid rgba(255, 68, 68, 0.4)",
+                    borderRadius: 6,
+                    color: "#ff8a80",
+                    fontSize: "0.65rem",
+                    padding: "2px 8px",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(255, 68, 68, 0.25)";
+                    e.currentTarget.style.color = "#ffffff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(255, 68, 68, 0.12)";
+                    e.currentTarget.style.color = "#ff8a80";
+                  }}
+                >
+                  ⏹️ إنهاء / Standby
                 </button>
               )}
             </div>

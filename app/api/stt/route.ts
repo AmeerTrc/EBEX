@@ -15,11 +15,8 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const audioFile = formData.get("audio") as Blob | null;
 
-    if (!audioFile) {
-      return NextResponse.json(
-        { error: "No audio file provided in request." },
-        { status: 400 }
-      );
+    if (!audioFile || audioFile.size < 400) {
+      return NextResponse.json({ text: "", provider: "none" });
     }
 
     // 1. Primary STT: Groq Whisper (Ultra-fast ~200ms)

@@ -100,8 +100,11 @@ export function useApexMic(options: MicOptions = {}) {
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         let hasSpoken = false;
         let lastVoiceTime = Date.now();
-        const startTime = Date.now();
-        const silenceThreshold = options.silenceDelayMs || 1500; // 1.5s silence for natural language transitions
+        const silenceThreshold = options.silenceDelayMs || 1600;
+
+        // Dynamic acoustic floor calibration (adapts to room noise)
+        let noiseFloor = 10;
+        let sampleCount = 0;
 
         vadIntervalRef.current = setInterval(() => {
           if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== "recording") {
@@ -115,30 +118,31 @@ export function useApexMic(options: MicOptions = {}) {
           }
           const average = sum / dataArray.length;
 
-          // Volume threshold indicating active speech
-          if (average > 7) {
+          // Calibrate baseline noise during initial samples
+          if (sampleCount < 10) {
+            sampleCount++;
+            noiseFloor = Math.max(4, (noiseFloor * (sampleCount - 1) + average) / sampleCount);
+            return;
+          }
+
+          // Dynamic speech and silence thresholds
+          const speechThreshold = Math.max(13, noiseFloor + 7);
+          const silenceCutoff = Math.max(8, noiseFloor + 3);
+
+          if (average > speechThreshold) {
             hasSpoken = true;
             lastVoiceTime = Date.now();
           }
 
-          // If user spoke and then stopped for silenceThreshold -> Auto Stop & Submit!
-          if (hasSpoken && Date.now() - lastVoiceTime > silenceThreshold) {
+          // If user spoke and then paused for silenceThreshold -> Auto Stop & Submit!
+          if (hasSpoken && average <= silenceCutoff && Date.now() - lastVoiceTime > silenceThreshold) {
             if (vadIntervalRef.current) {
               clearInterval(vadIntervalRef.current);
               vadIntervalRef.current = null;
             }
             onSilenceRef.current?.();
           }
-
-          // Safety timeout: if user didn't speak for 30 seconds at all -> Auto Stop / cycle
-          if (!hasSpoken && Date.now() - startTime > 30000) {
-            if (vadIntervalRef.current) {
-              clearInterval(vadIntervalRef.current);
-              vadIntervalRef.current = null;
-            }
-            onSilenceRef.current?.();
-          }
-        }, 60);
+        }, 50);
       } catch (vadErr) {
         console.warn("[useApexMic] VAD setup failed, manual tap available:", vadErr);
       }
@@ -189,8 +193,14 @@ export function useApexMic(options: MicOptions = {}) {
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         let speechHits = 0;
+        const monitorStart = Date.now();
 
         interruptionIntervalRef.current = setInterval(() => {
+          // Grace period: ignore first 1200ms of playback to prevent speaker transient bursts
+          if (Date.now() - monitorStart < 1200) {
+            return;
+          }
+
           analyser.getByteFrequencyData(dataArray);
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
@@ -198,10 +208,10 @@ export function useApexMic(options: MicOptions = {}) {
           }
           const average = sum / dataArray.length;
 
-          // Sustained speech while APEX is speaking -> Barge-In!
-          if (average > 14) {
+          // Sustained intentional loud user speech (avoids speaker echo)
+          if (average > 42) {
             speechHits++;
-            if (speechHits >= 2) {
+            if (speechHits >= 4) {
               stopInterruptionMonitoring();
               onInterrupt();
             }
