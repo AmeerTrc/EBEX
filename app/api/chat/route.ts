@@ -95,8 +95,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
     }
 
-    // Server-side Language Command Detector
+    // Automatic Input Language Detector & Override Generator
     let languageOverrideInstruction = "";
+
+    const hasArabicChar = /[\u0600-\u06FF]/.test(userMessage);
+
+    const isPortugueseInput =
+      /[ãçéêóôáàúí]/.test(lower) ||
+      /\b(olá|ola|oi|tudo|bem|bom|boa|dia|tarde|noite|como|vai|você|voce|obrigado|obrigada|favor|falar|fale|português|portugues|brasileiro|brasil|está|estou|sim|não|nao|comigo|para|com|muito|mais|qual|quem|onde|quando|porque|minha|meu|amiga|amigo|seja|bem-vinda|bem-vindo|estamos|ajudar|ajuda|preciso|pode)\b/i.test(lower);
 
     const isArabicRequested =
       lower.includes("árabe") ||
@@ -145,10 +151,14 @@ export async function POST(request: Request) {
 
     if (isArabicRequested) {
       languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: Ameer explicitly commanded you to respond in ARABIC. You MUST generate 100% of your response in fluent, natural ARABIC only. Do NOT use English or Portuguese.";
-    } else if (isPortugueseRequested) {
-      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: Ameer explicitly commanded you to respond in PORTUGUESE (Português do Brasil). You MUST generate 100% of your response in fluent PORTUGUESE only. Do NOT use Arabic or English.";
+    } else if (isPortugueseRequested || isPortugueseInput) {
+      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: The user is speaking in PORTUGUESE (Português do Brasil). You MUST generate 100% of your response in fluent, natural PORTUGUESE (Português do Brasil) only. Do NOT use English or Arabic.";
     } else if (isEnglishRequested) {
       languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: Ameer explicitly commanded you to respond in ENGLISH. You MUST generate 100% of your response in fluent ENGLISH only. Do NOT use Arabic or Portuguese.";
+    } else if (hasArabicChar) {
+      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: The user is speaking in ARABIC. You MUST generate 100% of your response in fluent, natural ARABIC only. Do NOT use English or Portuguese.";
+    } else {
+      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: The user is speaking in ENGLISH. You MUST generate 100% of your response in fluent ENGLISH only. Do NOT use Portuguese or Arabic.";
     }
 
     const effectiveSystemPrompt = APEX_SYSTEM_PROMPT + languageOverrideInstruction;
