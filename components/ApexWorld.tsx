@@ -456,9 +456,6 @@ export default function ApexWorld() {
         isProcessingRef.current = false;
         return;
       }
-        isProcessingRef.current = false;
-        return;
-      }
 
       const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setDialogueTurns((prev) => [
