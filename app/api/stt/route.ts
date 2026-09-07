@@ -29,7 +29,7 @@ export async function POST(request: Request) {
         groqForm.append("temperature", "0");
         groqForm.append(
           "prompt",
-          "Ameer Mustafa, APEX, conversation in Arabic, Portuguese, or English. مرحباً، Olá, Hello."
+          "Accurately transcribe user speech in its single native language without mixing words or languages."
         );
 
         const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
                         },
                       },
                       {
-                        text: "You are an expert multilingual audio transcriber. Accurately transcribe the user's spoken words in this audio. The user may speak Arabic, English, or Portuguese. Transcribe their exact spoken words in whichever language they used. If they spoke Portuguese, transcribe in Portuguese. If Arabic, transcribe in Arabic. If English, transcribe in English. Return ONLY the transcribed text, without any timestamps, explanation, or quotes.",
+                        text: "Accurately transcribe the exact spoken words in the single primary language spoken in the audio. Do not mix languages or combine different scripts. Return ONLY the transcribed text in the exact language used.",
                       },
                     ],
                   },
