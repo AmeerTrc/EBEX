@@ -94,6 +94,64 @@ export async function POST(request: Request) {
       return NextResponse.json({ reply: directGreeting, provider: "apex-core" });
     }
 
+    // Server-side Language Command Detector
+    let languageOverrideInstruction = "";
+
+    const isArabicRequested =
+      lower.includes("árabe") ||
+      lower.includes("arabe") ||
+      lower.includes("arabic") ||
+      lower.includes("بالعربية") ||
+      lower.includes("بالعربي") ||
+      lower.includes("باللغة العربية") ||
+      lower.includes("تحدث عربي") ||
+      lower.includes("تكلم عربي") ||
+      lower.includes("تحدث بالعربية") ||
+      lower.includes("تكلم بالعربية") ||
+      lower.includes("fale em árabe") ||
+      lower.includes("falar em árabe") ||
+      lower.includes("responda em árabe") ||
+      lower.includes("speak in arabic") ||
+      lower.includes("speak arabic") ||
+      lower.includes("talk in arabic");
+
+    const isPortugueseRequested =
+      lower.includes("português") ||
+      lower.includes("portugues") ||
+      lower.includes("portuguese") ||
+      lower.includes("برازيلي") ||
+      lower.includes("بالبرتغالية") ||
+      lower.includes("بالبرتغالي") ||
+      lower.includes("باللغة البرتغالية") ||
+      lower.includes("تحدث برتغالي") ||
+      lower.includes("تحدث بالبرتغالية") ||
+      lower.includes("fale em português") ||
+      lower.includes("speak in portuguese") ||
+      lower.includes("speak portuguese");
+
+    const isEnglishRequested =
+      lower.includes("inglês") ||
+      lower.includes("ingles") ||
+      lower.includes("english") ||
+      lower.includes("بالإنجليزية") ||
+      lower.includes("بالإنجليزي") ||
+      lower.includes("باللغة الإنجليزية") ||
+      lower.includes("تحدث إنجليزي") ||
+      lower.includes("تحدث بالإنجليزية") ||
+      lower.includes("fale em inglês") ||
+      lower.includes("speak in english") ||
+      lower.includes("speak english");
+
+    if (isArabicRequested) {
+      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: Ameer explicitly commanded you to respond in ARABIC. You MUST generate 100% of your response in fluent, natural ARABIC only. Do NOT use English or Portuguese.";
+    } else if (isPortugueseRequested) {
+      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: Ameer explicitly commanded you to respond in PORTUGUESE (Português do Brasil). You MUST generate 100% of your response in fluent PORTUGUESE only. Do NOT use Arabic or English.";
+    } else if (isEnglishRequested) {
+      languageOverrideInstruction = "\n\nMANDATORY EXECUTIVE OVERRIDE: Ameer explicitly commanded you to respond in ENGLISH. You MUST generate 100% of your response in fluent ENGLISH only. Do NOT use Arabic or Portuguese.";
+    }
+
+    const effectiveSystemPrompt = APEX_SYSTEM_PROMPT + languageOverrideInstruction;
+
     // 1. Primary LLM: Groq (Ultra-fast real-time inference ~200ms)
     if (groqApiKey && groqApiKey.trim().length > 0) {
       const groqCandidateModels = [
@@ -107,7 +165,7 @@ export async function POST(request: Request) {
       for (const model of groqCandidateModels) {
         try {
           const messages = [
-            { role: "system", content: APEX_SYSTEM_PROMPT },
+            { role: "system", content: effectiveSystemPrompt },
             ...history.slice(-8).map((msg) => ({
               role: msg.role === "model" ? "assistant" : msg.role,
               content: msg.text,
@@ -176,7 +234,7 @@ export async function POST(request: Request) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               systemInstruction: {
-                parts: [{ text: APEX_SYSTEM_PROMPT }],
+                parts: [{ text: effectiveSystemPrompt }],
               },
               contents,
               generationConfig: {
